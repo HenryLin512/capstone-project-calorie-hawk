@@ -46,13 +46,10 @@ Calorie Hawk solves these problems by making tracking **accessible, accurate, an
 - **Frontend:** React Native (cross-platform iOS/Android)  
 - **Backend:** Firebase (authentication, cloud storage)  
 - **Database:** SQLite (local offline storage)  
-- **APIs/AI:**  
-  - USDA FoodData Central (nutrition data)  
-  - Google Vision API or custom AI model for food recognition  
-  - Machine learning for calorie estimation from photos  
+- **Python (API) -> AI**
+  - Use Google Vision for AI food recognitions
+  - Use USDA FoodData Central API to fetch calories
+  - Use preset personalities to coach user and give feedback
 
 ---
 
-
-npm install
-npm run start
