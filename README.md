@@ -45,7 +45,7 @@ Calorie Hawk solves these problems by making tracking **accessible, accurate, an
 ## 🛠️ Tech Stack
 - **Frontend:** React Native (cross-platform iOS/Android)  
 - **Backend:** Firebase (authentication, cloud storage)  
-- **Database:** SQLite (local offline storage)  
+- **Database:** Cloud Firestore: NoSQL document database  
 - **Python (API) -> AI**
   - Use Google Vision for AI food recognitions
   - Use USDA FoodData Central API to fetch calories
