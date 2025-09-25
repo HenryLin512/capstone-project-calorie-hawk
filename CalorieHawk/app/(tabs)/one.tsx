@@ -171,7 +171,7 @@ export default function Dashboard() {
           <Text style={styles.h1}>Today</Text>
           <Text style={styles.subtle}>{todayStr}</Text>
         </View>
-        <Pressable onPress={() => router.push('/setting')}>
+        <Pressable onPress={() => router.push('/two')}>
           <Ionicons name="settings-outline" size={22} color={COLORS.subtext} />
         </Pressable>
       </View>
