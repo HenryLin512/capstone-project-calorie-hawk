@@ -1,14 +1,62 @@
-import { StyleSheet } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, StyleSheet } from "react-native";
+import { useState, useEffect } from "react";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "@/FireBaseConfig"; // adjust path if needed
+import { router } from "expo-router";
 
-import EditScreenInfo from '@/components/EditScreenInfo';
-import { Text, View } from '@/components/Themed';
+export default function SettingScreen() {
+  const [isDarkMode, setDarkmode] = useState(false);
+  const [notification, setNotification] = useState(false);
 
-export default function TabTwoScreen() {
+  // watch for auth changes, redirect if user logs out
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        router.replace("/"); // go back to login (index)
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // onAuthStateChanged will handle the redirect
+    } catch (error: any) {
+      console.error("Logout failed:", error.message);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Tab Two</Text>
-      <View style={styles.separator} lightColor="#eee" darkColor="rgba(255,255,255,0.1)" />
-      <EditScreenInfo path="app/(tabs)/two.tsx" />
+      <Text style={styles.title}>Settings</Text>
+
+      {/* Account */}
+      <View style={styles.section}>
+        <TouchableOpacity style={styles.item}>
+          <Text style={styles.text}>Edit Profile</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.item}>
+          <Text style={styles.text}>Change Password</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Preferences */}
+      <View style={styles.section}>
+        <Text style={styles.text}>Dark Mode</Text>
+        <Switch value={isDarkMode} onValueChange={setDarkmode} />
+      </View>
+      <View style={styles.section}>
+        <Text style={styles.text}>Notification</Text>
+        <Switch value={notification} onValueChange={setNotification} />
+      </View>
+
+      {/* Log out */}
+      <View style={styles.section}>
+        <TouchableOpacity onPress={handleLogout}>
+          <Text style={[styles.text, { color: "red" }]}>Log Out</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -16,16 +64,22 @@ export default function TabTwoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: "#fff",
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
+    marginBottom: 20,
   },
-  separator: {
-    marginVertical: 30,
-    height: 1,
-    width: '80%',
+  section: { marginBottom: 20 },
+  item: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
   },
+  text: { fontSize: 16 },
 });
