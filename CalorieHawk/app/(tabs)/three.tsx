@@ -1,7 +1,7 @@
 import { StyleSheet, TextInput, FlatList, TouchableOpacity, Text, SafeAreaView, View } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { db } from '../../FireBaseConfig';
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, orderBy, DocumentData } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, orderBy, DocumentData, onSnapshot } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 //some sample data to test
@@ -32,45 +32,28 @@ export default function TabThreeScreen() {
 
   const auth = getAuth();
   const user = auth.currentUser;
-  //const user = auth.currentUser;
+  
 
-  //fetch from Firestore
+  //Update live history tab if database receive new value.
   useEffect(() => {
-    const fetchData = async () => {
-      if (!user) 
-        return;
-      try {
-        const userID = auth.currentUser.uid;
-        const q = collection(db, "users", user?.uid, "calories");
-        const snapshot = await getDocs(q);
+    if (!user) return;
 
-        //const data = snapshot.docs.map(doc => doc.data());
-        //let data: any[] = []; // an array can hold anything (object, strings, numbers, etc.)
-        // Map date -> total calories for that day
-        const dataMap: { [date: string]: number } = {};
+    const q = collection(db, "users", user.uid, "calories");
 
-        snapshot.docs.forEach(docSnap => 
-          {
-          const entries = docSnap.data().entries || [];
-          const totalKcal = entries.reduce((sum: number, entry: any) => sum + entry.kcal, 0)
-          // entries.forEach((entry: any) => 
-          //   {
-          //   data.push({
-          //     date: docSnap.id,
-          //     calories: entry.kcal,
-          //   });
-          // });
-          dataMap[docSnap.id] = totalKcal;
-        });
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const dataMap: { [date: string]: number } = {};
 
-        const data = Object.entries(dataMap).map(([date, calories]) => ({ date, calories}));
-        setAllData(data); // save all raw entries
-      } catch (error) {
-        console.error("Error fetching calories:", error);
-      }
-    };
+      snapshot.docs.forEach(docSnap => {
+        const entries = docSnap.data().entries || [];
+        const totalKcal = entries.reduce((sum: number, entry: any) => sum + entry.kcal, 0);
+        dataMap[docSnap.id] = totalKcal;
+      });
 
-    fetchData();
+      const data = Object.entries(dataMap).map(([date, calories]) => ({ date, calories }));
+      setAllData(data);
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
   // recalc display data whenever viewType or allData changes
@@ -207,4 +190,42 @@ const styles = StyleSheet.create({
   empty: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#888' },
 });
 
+// DO NOT DELETE THIS since I can reuse some of it later
+//fetch from Firestore
+  // useEffect(() => {
+  //   const fetchData = async () => {
+  //     if (!user) 
+  //       return;
+  //     try {
+  //       const userID = auth.currentUser.uid;
+  //       const q = collection(db, "users", user?.uid, "calories");
+  //       const snapshot = await getDocs(q);
 
+  //       //const data = snapshot.docs.map(doc => doc.data());
+  //       //let data: any[] = []; // an array can hold anything (object, strings, numbers, etc.)
+  //       // Map date -> total calories for that day
+  //       const dataMap: { [date: string]: number } = {};
+
+  //       snapshot.docs.forEach(docSnap => 
+  //         {
+  //         const entries = docSnap.data().entries || [];
+  //         const totalKcal = entries.reduce((sum: number, entry: any) => sum + entry.kcal, 0)
+  //         // entries.forEach((entry: any) => 
+  //         //   {
+  //         //   data.push({
+  //         //     date: docSnap.id,
+  //         //     calories: entry.kcal,
+  //         //   });
+  //         // });
+  //         dataMap[docSnap.id] = totalKcal;
+  //       });
+
+  //       const data = Object.entries(dataMap).map(([date, calories]) => ({ date, calories}));
+  //       setAllData(data); // save all raw entries
+  //     } catch (error) {
+  //       console.error("Error fetching calories:", error);
+  //     }
+  //   };
+
+  //   fetchData();
+  // }, [user]);
