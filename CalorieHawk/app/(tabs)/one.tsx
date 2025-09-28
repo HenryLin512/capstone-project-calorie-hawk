@@ -17,6 +17,9 @@ import { router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import Donut from '../../components/Donut';
+import { db, auth } from '../../FireBaseConfig';
+import { doc, setDoc, arrayUnion } from 'firebase/firestore';
+import dayjs from 'dayjs';
 
 const COLORS = {
   bg: '#FFFFFF',
@@ -93,14 +96,20 @@ export default function Dashboard() {
     setModalVisible(true);
   };
 
-  const saveEntry = () => {
+  const saveEntry = async () => {
     const kcal = Number(entryKcal || 0);
     if (!kcal) {
       setModalVisible(false);
       return;
     }
     const id = Math.random().toString(36).slice(2);
-    const newEntry: Entry = { id, kcal, photoUri, timestamp: Date.now(), meal: activeMeal };
+    const newEntry: Entry = 
+    { id, 
+      kcal, 
+      photoUri: photoUri ? photoUri : "",
+      timestamp: Date.now(), 
+      meal: activeMeal || "Unknown"
+    };
 
     // if the meal label doesn't exist yet, create it with a small default target
     setMeals(prev => {
@@ -112,6 +121,27 @@ export default function Dashboard() {
         : [{ label: activeMeal, target: 300, entries: [newEntry] }, ...prev];
       return updated;
     });
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Not logged in");
+
+      const today = dayjs().format("YYYY-MM-DD");
+      const dayDocRef = doc(db, "users", user.uid, "calories", today);
+
+      console.log("Saving newEntry:", newEntry);
+
+      await setDoc(dayDocRef, {
+        date: today,
+        entries: arrayUnion(newEntry),
+      }, { merge: true });
+
+      console.log("Saved to Firestore:", today, newEntry);
+    } 
+    catch (err) 
+    {
+      console.error("Error saving entry:", err);
+      Alert.alert("Save failed", "Could not save entry to database.");
+    }
 
     setModalVisible(false);
   };
