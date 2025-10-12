@@ -15,7 +15,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDpSMeNBp63LpVW0g7qAoR71PevHV4nbLI",
   authDomain: "caloriehawk-175bc.firebaseapp.com",
   projectId: "caloriehawk-175bc",
-  storageBucket: "caloriehawk-175bc.appspot.com",
+  storageBucket: "caloriehawk-175bc.firebasestorage.app",
   messagingSenderId: "872994424947",
   appId: "1:872994424947:web:91b2ec351c8f63d6568206",
   measurementId: "G-Z6GEPPK3Q4"
