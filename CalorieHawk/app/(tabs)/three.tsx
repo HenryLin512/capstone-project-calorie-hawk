@@ -1,192 +1,209 @@
-import { StyleSheet, TextInput, FlatList, TouchableOpacity, Text, SafeAreaView, View } from 'react-native';
+import { StyleSheet, FlatList, TouchableOpacity, Text, View, Image, ActivityIndicator } from 'react-native';
 import React, { useState, useEffect } from 'react';
-import { db } from '../../FireBaseConfig';
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, orderBy, DocumentData, onSnapshot } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { auth, db } from '../../FireBaseConfig';
+import { collection, getDocs } from 'firebase/firestore';
 
-//some sample data to test
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
-  //month Name
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
+const parseDate = (dateStr: string) => {
+  const [y, m, d] = dateStr.split('-').map(n => parseInt(n, 10));
+  return new Date(y, (m - 1), d);
+};
 
-  //Make other OS can display "/" instead of "-" in time
-  const parseDate = (dateStr: string) =>{
-    const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
-    const year = parseInt (parts[0], 10);
-    const month = parseInt (parts[1], 10) - 1; 
-    const day = parseInt (parts[2], 10);
-    return new Date(year, month, day);
-  }
-
-
-export default function TabThreeScreen() {
-  //const [history, setHistory] = useState([]);
-  //const auth = getAuth();
-
+export default function HistoryTab() {
   const [viewType, setViewType] = useState<'day' | 'week' | 'month' | 'year'>('day');
   const [displayData, setDisplayData] = useState<any[]>([]);
-  const [allData, setAllData] = useState<any[]>([]);
+  const [allData, setAllData] = useState<{ date: string; calories: number; photos: string[] }[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const auth = getAuth();
-  const user = auth.currentUser;
-  
-
-  //Update live history tab if database receive new value.
   useEffect(() => {
-    if (!user) return;
+    const run = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setAllData([]);
+        setLoading(false);
+        return;
+      }
 
-    const q = collection(db, "users", user.uid, "calories");
+      try {
+        setLoading(true);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const dataMap: { [date: string]: number } = {};
+        // --- Fetch calories ---
+        const calCol = collection(db, 'users', user.uid, 'calories');
+        const calSnap = await getDocs(calCol);
+        const calorieMap: Record<string, number> = {};
+        calSnap.docs.forEach(d => {
+          const entries: any[] = Array.isArray(d.data()?.entries) ? d.data().entries : [];
+          const total = entries.reduce((acc, e) => acc + Number(e?.kcal || 0), 0);
+          calorieMap[d.id] = total;
+        });
 
-      snapshot.docs.forEach(docSnap => {
-        const entries = docSnap.data().entries || [];
-        const totalKcal = entries.reduce((sum: number, entry: any) => sum + entry.kcal, 0);
-        dataMap[docSnap.id] = totalKcal;
-      });
+        // --- Fetch photos ---
+        const photoCol = collection(db, 'users', user.uid, 'photos');
+        const photoSnap = await getDocs(photoCol);
+        const photoMap: Record<string, string[]> = {};
+        photoSnap.docs.forEach(d => {
+          const photos: any[] = Array.isArray(d.data()?.photos) ? d.data().photos : [];
+          photoMap[d.id] = photos.map(p => p.url);
+        });
 
-      const data = Object.entries(dataMap).map(([date, calories]) => ({ date, calories }));
-      setAllData(data);
-    });
+        // --- Combine data by date ---
+        const allDates = new Set([...Object.keys(calorieMap), ...Object.keys(photoMap)]);
+        const combined = Array.from(allDates).map(date => ({
+          date,
+          calories: calorieMap[date] || 0,
+          photos: photoMap[date] || [],
+        }));
 
-    return () => unsubscribe();
-  }, [user]);
+        combined.sort((a, b) => a.date.localeCompare(b.date));
+        setAllData(combined);
+      } catch (e) {
+        console.log('Error fetching history:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    run();
+  }, []);
 
-  // recalc display data whenever viewType or allData changes
+  // Filter/aggregate display
   useEffect(() => {
-    calculateDisplayData();
-  }, [viewType, allData]);
-  
-  const calculateDisplayData = () => {
-    if(allData.length === 0)
-    {
+    if (!allData.length) {
       setDisplayData([]);
       return;
     }
 
-    //day display
-    if (viewType === 'day') 
-      {
-      setDisplayData(allData.map(item => {
-        const dateObj = parseDate(item.date);
-        return {
-          label: `${dateObj.getDate()} / ${dateObj.getMonth() + 1} / ${dateObj.getFullYear()}`,
-          calories: item.calories,
-        };
-      }));
+    if (viewType === 'day') {
+      setDisplayData(allData.map(item => ({
+        label: item.date,
+        calories: item.calories,
+        photos: item.photos,
+      })));
+      return;
+    }
 
-    //week display
-    } else if (viewType === 'week') {
-      let weeks: { week: number, calories: number }[] = [];
+    if (viewType === 'week') {
+      const weeks: { week: number; calories: number }[] = [];
       allData.forEach((item, index) => {
         const weekIndex = Math.floor(index / 7);
-        if (!weeks[weekIndex]) 
-          weeks[weekIndex] = { week: weekIndex + 1, calories: 0 };
+        if (!weeks[weekIndex]) weeks[weekIndex] = { week: weekIndex + 1, calories: 0 };
         weeks[weekIndex].calories += item.calories;
       });
-
-      setDisplayData(weeks.map(w => ({ label: `Week ${w.week}`, calories: w.calories })));
-
-    //month display
-    } else if (viewType === 'month') {
-      const months: { [key: string]: number } = {};
-
-      allData.forEach(item => {
-        const dateObj = parseDate(item.date);
-        const monthName = monthNames[dateObj.getMonth()]; // get month name
-        const key = `${monthName} ${dateObj.getFullYear()}`; // e.g., "September 2025"
-
-        if (!months[key]) 
-          months[key] = 0;
-        months[key] += item.calories;
-      });
-
-      setDisplayData(Object.entries(months).map(([key, calories]) => ({ label: key, calories })));
-
-    //year display
-    } else if (viewType === 'year') {
-      const years: { [key: string]: number } = {};
-      allData.forEach(item => {
-        const dateObj = parseDate(item.date);
-        const key = `${dateObj.getFullYear()}`;
-
-        if (!years[key]) 
-          years[key] = 0;
-        years[key] += item.calories;
-      });
-      setDisplayData(Object.entries(years).map(([key, calories]) => ({ label: key, calories })));
+      setDisplayData(weeks.map(w => ({ label: `Week ${w.week}`, calories: w.calories, photos: [] })));
+      return;
     }
-  };
 
+    if (viewType === 'month') {
+      const months: Record<string, number> = {};
+      allData.forEach(item => {
+        const d = parseDate(item.date);
+        const key = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+        months[key] = (months[key] || 0) + item.calories;
+      });
+      setDisplayData(Object.entries(months).map(([label, calories]) => ({ label, calories, photos: [] })));
+      return;
+    }
+
+    if (viewType === 'year') {
+      const years: Record<string, number> = {};
+      allData.forEach(item => {
+        const d = parseDate(item.date);
+        const key = String(d.getFullYear());
+        years[key] = (years[key] || 0) + item.calories;
+      });
+      setDisplayData(Object.entries(years).map(([label, calories]) => ({ label, calories, photos: [] })));
+      return;
+    }
+  }, [viewType, allData]);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator />
+        <Text style={{ marginTop: 6 }}>Loading history…</Text>
+      </View>
+    );
+  }
 
   return (
-     <View style={styles.container}>
+    <View style={styles.container}>
+      <Text style={styles.title}>History</Text>
+
+      {/* Toggle buttons */}
       <View style={styles.buttonsContainer}>
-        {['day', 'week', 'month', 'year'].map(type => (
+        {(['day', 'week', 'month', 'year'] as const).map(type => (
           <TouchableOpacity
             key={type}
             style={[styles.button, viewType === type && styles.activeButton]}
-            onPress={() => setViewType(type as any)}
+            onPress={() => setViewType(type)}
           >
             <Text style={styles.buttonText}>{type.toUpperCase()}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* List */}
+      {/* List of entries */}
       <FlatList
         data={displayData}
-        keyExtractor={(item, index) => index.toString()}
+        keyExtractor={(_, idx) => String(idx)}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.date}>{item.label}</Text>
-            <Text style={styles.calories}>{item.calories} cal</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.date}>{item.label}</Text>
+              <Text style={styles.calories}>{item.calories} cal</Text>
+
+              {/* Thumbnails */}
+              {item.photos?.length ? (
+                <View style={styles.photoRow}>
+                  {item.photos.slice(0, 4).map((url: string, idx: number) => (
+                    <Image key={idx} source={{ uri: url }} style={styles.thumb} />
+                  ))}
+                </View>
+              ) : null}
+            </View>
           </View>
         )}
         ListEmptyComponent={<Text style={styles.empty}>No data available</Text>}
+        contentContainerStyle={{ padding: 16, paddingTop: 6 }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    //justifyContent: 'center',
-    padding: 20,
-    backgroundColor: "#fff",
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  container: { flex: 1, alignItems: 'center', paddingTop: 12, backgroundColor: '#fff' },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+    alignSelf: 'stretch',
   },
-
-  buttonsContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 },
-  button: { padding: 8, borderRadius: 8, backgroundColor: '#eee' },
-  activeButton: { backgroundColor: '#4CAF50' },
-  buttonText: { color: '#000', fontWeight: 'bold' },
-  // row: { flexDirection: 'row', justifyContent: 'space/between', paddingVertical: 12, borderBottomWidth: 1, borderColor: '#ddd' },
-  
-  card: 
-  { backgroundColor: '#fff', 
-    borderRadius: 10, 
-    padding: 16, 
-    marginBottom: 12, 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center',
-    // Shadow for IOS
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
+  buttonsContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16, alignSelf: 'stretch', paddingHorizontal: 16 },
+  button: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#eee' },
+  activeButton: { backgroundColor: '#5B21B6' },
+  buttonText: { color: '#fff', fontWeight: 'bold' },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 12,
+    alignSelf: 'stretch',
+    // shadow
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
     shadowRadius: 6,
-    shadowOffset: {width: 0, height: 3 },
-    //Elevation for Android
+    shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-
-  date: { fontSize: 20 },
-  calories: { fontSize: 20, fontWeight: 'bold', color: '#4CAF50', marginLeft: 20 },
+  date: { fontSize: 18, fontWeight: '600', marginBottom: 4 },
+  calories: { fontSize: 16, color: '#4CAF50', marginBottom: 6 },
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  thumb: { width: 60, height: 60, borderRadius: 8 },
   empty: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#888' },
 });
 

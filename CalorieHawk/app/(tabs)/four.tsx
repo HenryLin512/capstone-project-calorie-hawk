@@ -1,196 +1,120 @@
-import { 
-  StyleSheet, 
-  Image, 
-  FlatList, 
-  Alert, 
-  TouchableOpacity, 
-  Text, 
-  View 
-} from "react-native";
-import React, { useState, useEffect } from "react";
-import { storage, auth } from "../../FireBaseConfig";
-import { 
-  getDownloadURL, 
-  ref, 
-  uploadBytes, 
-  listAll, 
-  deleteObject 
-} from "firebase/storage";
-import * as ImagePicker from "expo-image-picker";
-import { User, onAuthStateChanged } from "firebase/auth";
+/**
+ * ===============================================
+ * Calorie Hawk - Goal Setup (four.tsx)
+ * -----------------------------------------------
+ * Allows users to set or schedule calorie goals
+ * for specific days or weeks in advance.
+ *
+ * Integrates:
+ *   - Firebase Firestore for goal storage
+ *   - Dynamic linking from Dashboard (FAB)
+ * ===============================================
+ */
 
-export default function TabThreeScreen() {
-  const [image, setImage] = useState<string | null>(null);
-  const [images, setImages] = useState<string[]>([]);
-  const [user, setUser] = useState<User | null>(null);
+import React, { useState } from 'react';
+import {
+  SafeAreaView,
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  Alert,
+  StyleSheet,
+} from 'react-native';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../../FireBaseConfig';
+import dayjs from 'dayjs';
+import { router } from 'expo-router';
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        fetchImages(currentUser.uid);
-      }
-    });
-    return unsubscribe;
-  }, []);
+export default function GoalSetupScreen() {
+  const [goal, setGoal] = useState('');
+  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
 
-  // Fetch images for the logged-in user
-  const fetchImages = async (userId: string) => {
-    try {
-      const storageRef = ref(storage, `images/${userId}`);
-      const result = await listAll(storageRef);
-      const urls = await Promise.all(
-        result.items.map((itemRef) => getDownloadURL(itemRef))
-      );
-      setImages(urls);
-    } catch (error) {
-      console.error("❌ Error fetching images: ", error);
-    }
-  };
-
-  // Pick an image from gallery
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // ✅ still supported
-      allowsEditing: false,
-      aspect: [4, 3],
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const imageUri = result.assets[0].uri;
-      setImage(imageUri);
-      console.log("📸 Image picked: ", imageUri);
-    }
-  };
-
-  // Upload image to Firebase Storage
-  const uploadImage = async () => {
-    if (!user || !image) {
-      Alert.alert("Error", "No user or image found!");
+  const saveGoal = async () => {
+    const kcal = Number(goal);
+    if (!kcal || kcal < 100) {
+      Alert.alert('Invalid Input', 'Please enter a valid calorie number.');
       return;
     }
 
-    try {
-      console.log("⬆️ Uploading image: ", image);
-
-      // Convert local file URI → Blob
-      const response = await fetch(image);
-      const blob = await response.blob();
-
-      // Create a storage reference
-      const storageRef = ref(storage, `images/${user.uid}/${Date.now()}.jpg`);
-
-      // Upload
-      await uploadBytes(storageRef, blob);
-
-      // Get download URL
-      const url = await getDownloadURL(storageRef);
-      setImages((prev) => [...prev, url]);
-      setImage(null);
-
-      console.log("✅ Upload complete: ", url);
-    } catch (error: any) {
-      console.error("❌ Error uploading image: ", error);
-      Alert.alert("Upload failed", error.message);
-    }
-  };
-
-  // Delete image from Firebase Storage
-  const deleteImage = async (url: string) => {
+    const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "No user found!");
+      Alert.alert('Not Logged In', 'Please sign in to save your goal.');
       return;
     }
 
     try {
-      // Extract Firebase storage path from full URL
-      const path = url.split("/o/")[1].split("?")[0];
-      const decodedPath = decodeURIComponent(path);
+      const ref = doc(db, 'users', user.uid, 'calorieGoals', date);
+      await setDoc(ref, {
+        goal: kcal,
+        date,
+        type: 'daily',
+        createdAt: serverTimestamp(),
+      });
 
-      const storageRef = ref(storage, decodedPath);
-      await deleteObject(storageRef);
-
-      setImages((prev) => prev.filter((img) => img !== url));
-      console.log("🗑️ Deleted: ", url);
-    } catch (error: any) {
-      console.error("❌ Error deleting image: ", error);
-      Alert.alert("Delete failed", error.message);
+      Alert.alert('Goal Saved ✅', `Your goal for ${date} is set to ${kcal} kcal.`);
+      router.back();
+    } catch (err) {
+      console.error('Error saving goal:', err);
+      Alert.alert('Save Failed', 'Could not save goal to database.');
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Storage</Text>
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>📅 Set Calorie Goal</Text>
 
-      <TouchableOpacity style={styles.button} onPress={pickImage}>
-        <Text style={styles.buttonText}>Pick an image from camera roll</Text>
-      </TouchableOpacity>
-
-      {image && (
-        <>
-          <Image source={{ uri: image }} style={styles.image} />
-          <TouchableOpacity style={styles.button} onPress={uploadImage}>
-            <Text style={styles.buttonText}>Upload Image</Text>
-          </TouchableOpacity>
-        </>
-      )}
-
-      <FlatList
-        data={images}
-        renderItem={({ item }) => (
-          <View style={styles.imageContainer}>
-            <Image source={{ uri: item }} style={styles.image} />
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => deleteImage(item)}
-            >
-              <Text style={styles.buttonText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        keyExtractor={(item, index) => index.toString()}
+      <Text style={styles.label}>Target Date</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="YYYY-MM-DD"
+        value={date}
+        onChangeText={setDate}
       />
-    </View>
+
+      <Text style={styles.label}>Calorie Goal (kcal)</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder="e.g. 2200"
+        value={goal}
+        onChangeText={setGoal}
+      />
+
+      <Pressable style={styles.saveBtn} onPress={saveGoal}>
+        <Text style={styles.saveText}>Save Goal</Text>
+      </Pressable>
+
+      <Pressable style={styles.cancelBtn} onPress={() => router.back()}>
+        <Text style={styles.cancelText}>Cancel</Text>
+      </Pressable>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-  image: {
-    width: 200,
-    height: 200,
-    marginVertical: 10,
-  },
-  imageContainer: {
-    alignItems: "center",
-    marginVertical: 10,
-  },
-  button: {
-    padding: 10,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#5C6BC0",
-    marginTop: 10,
-  },
-  buttonText: {
-    color: "#FFFFFF",
+  container: { flex: 1, padding: 24, justifyContent: 'center', backgroundColor: '#fff' },
+  title: { fontSize: 28, fontWeight: '800', marginBottom: 24, textAlign: 'center' },
+  label: { fontSize: 16, marginTop: 14, color: '#444' },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
     fontSize: 16,
-    fontWeight: "600",
   },
+  saveBtn: {
+    backgroundColor: '#5B21B6',
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  saveText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  cancelBtn: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  cancelText: { color: '#6B6A75', fontSize: 15 },
 });
-
