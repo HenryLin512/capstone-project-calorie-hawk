@@ -41,6 +41,7 @@ import { doc, onSnapshot, serverTimestamp, setDoc, arrayUnion } from 'firebase/f
 
 // Utils for photo picking and upload
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
+import { scanFood } from '../../utils/foodRecognition';
 
 /**
  * -------------------------------
@@ -197,8 +198,34 @@ export default function Dashboard() {
   };
 
   const handleAddPhoto = async () => {
+    // Upload photo first (this uses the camera once), then ask Clarifai to analyze the uploaded image URL.
     const url = await pickUploadAndSaveMeta(activeMeal);
-    if (url) setPhotoUri(url);
+    if (!url) return;
+    setPhotoUri(url);
+
+    const result = await scanFood({ imageUrl: url });
+    const concepts = result?.concepts ?? [];
+    if (!concepts.length) {
+      Alert.alert('No suggestion', 'Could not identify food from the photo.');
+      return;
+    }
+
+    const top3 = concepts.slice(0, 3);
+    const msg = top3.map(c => `${c.name} — ${Math.round((c.value ?? 0) * 100)}%`).join('\n');
+    const top = top3[0];
+    const CONF_THRESHOLD = 0.45; // only show confident "use" action above this
+
+    if (top.value >= CONF_THRESHOLD) {
+      Alert.alert('Food detected', msg, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: `Use "${top.name}"`, onPress: () => {
+            setActiveMeal(top.name.charAt(0).toUpperCase() + top.name.slice(1));
+          }
+        }
+      ]);
+    } else {
+      Alert.alert('Low confidence', `Top guesses:\n${msg}`);
+    }
   };
 
   const saveEntry = async () => {

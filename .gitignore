@@ -1,0 +1,29 @@
+# Root ignore for repository
+# Ignore Node.js dependencies at repo root
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Env files and local secrets
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build outputs
+build/
+dist/
+coverage/
+
+# Expo / React Native caches (in case subprojects are missing their own ignore)
+.expo/
+.expo-shared/
+
+# IDE
+.vscode/
