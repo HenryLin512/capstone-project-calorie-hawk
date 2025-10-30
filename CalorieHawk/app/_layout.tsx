@@ -4,7 +4,15 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import 'react-native-reanimated';
+
+import 'react-native-gesture-handler'; // keep first for navigation
+
+// ✅ Only load Reanimated on native to avoid web logger crash
+import { Platform } from 'react-native';
+if (Platform.OS !== 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('react-native-reanimated');
+}
 
 import { useColorScheme } from '@/components/useColorScheme';
 
