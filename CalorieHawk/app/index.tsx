@@ -6,7 +6,7 @@ import { router } from "expo-router";
 
 
 import Colors from "../constants/Colors";
-import { useColorScheme } from "../components/useColorScheme";
+import { useColorScheme } from "react-native";
 
 export default function Login() {
   
