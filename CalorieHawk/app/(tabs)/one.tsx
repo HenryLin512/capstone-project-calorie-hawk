@@ -1,12 +1,12 @@
 /**
- * ===============================================
- * Calorie Hawk - Dashboard (Main Tab)
- * ===============================================
+ * Calorie Hawk - Main Page (Dashboard)
+ * - AI suggestions no longer change the meal bucket
+ * - Unknown meals are grouped into "Other"
+ * - FlatList keys are guaranteed unique
  */
 
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   StyleSheet,
@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -34,22 +35,24 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
 import { scanFood } from '../../utils/foodRecognition';
 
-// New components
+// UI helpers
 import MacroPebble from '@/components/MacroPebble';
 import QuickActionsRow from '@/components/QuickActionsRow';
 
-/** Local types */
 type Concept = { id?: string; name: string; value?: number };
 type ScanResultLocal = { concepts?: Concept[] } | null;
 
-type MealLabel = string;
+type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Other';
+
 type Entry = {
   id: string;
   kcal: number;
   photoUri?: string;
   timestamp: number;
-  meal: MealLabel;
+  meal: MealLabel;     // <- meal bucket (fixed set)
+  foodName?: string;   // <- AI human label like "Apple" (does NOT change meal)
 };
+
 type Meal = {
   label: MealLabel;
   target: number;
@@ -66,28 +69,23 @@ const COLORS = {
   purpleLight: '#EDE7FF',
   gold: '#F7C948',
   goldLight: '#FFF5D6',
-  orange: '#FF8A00',
-  blueTrack: '#E9EEF3',
 };
 
-// Step size for +/- buttons
 const KCAL_STEP = 50;
+
+const BUILT_INS: MealLabel[] = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Other'];
 
 const initialMeals: Meal[] = [
   { label: 'Breakfast', target: 635, entries: [] },
-  { label: 'Lunch', target: 847, entries: [] },
-  { label: 'Dinner', target: 529, entries: [] },
-  { label: 'Snacks', target: 106, entries: [] },
-  { label: 'Other', target: 300, entries: [] },
+  { label: 'Lunch',     target: 847, entries: [] },
+  { label: 'Dinner',    target: 529, entries: [] },
+  { label: 'Snacks',    target: 106, entries: [] },
+  { label: 'Other',     target: 300, entries: [] },
 ];
 
 export default function Dashboard() {
-  // Totals and day state
   const [meals, setMeals] = useState<Meal[]>(initialMeals);
-
-  // 👉 No default 2400 anymore; start at 0 and only load from Firestore if present
-  const [dailyGoal, setDailyGoal] = useState<number>(0);
-
+  const [dailyGoal, setDailyGoal] = useState<number>(0); // no default
   const [burned] = useState<number>(0);
 
   const eatenCalories = useMemo(
@@ -99,40 +97,34 @@ export default function Dashboard() {
 
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
-  const [activeMeal, setActiveMeal] = useState<MealLabel>('Dinner');
+  const [activeMeal, setActiveMeal] = useState<MealLabel>('Breakfast');
   const [entryKcal, setEntryKcal] = useState<string>('500');
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
 
-  // Upload / AI state
+  // AI state
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
   const [aiResult, setAiResult] = useState<ScanResultLocal>(null);
+  const [suggestedFoodName, setSuggestedFoodName] = useState<string | undefined>(undefined);
 
-  // Web file input
+  // Web input
   const webFileRef = useRef<HTMLInputElement | null>(null);
 
   const todayKey = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
 
-  /** Load goal (if exists) */
+  /** Goal (if exists) */
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
-
     const goalRef = doc(db, 'users', user.uid, 'calorieGoals', todayKey);
     const unsubGoal = onSnapshot(goalRef, (snap) => {
       const data = snap.data();
-      // Only set if a goal exists; otherwise leave 0 so UI shows "Set goal"
-      if (typeof data?.goal === 'number' && data.goal > 0) {
-        setDailyGoal(data.goal);
-      } else {
-        setDailyGoal(0);
-      }
+      setDailyGoal(typeof data?.goal === 'number' && data.goal > 0 ? data.goal : 0);
     });
-
     return () => unsubGoal();
   }, [todayKey]);
 
-  /** Load entries for the day */
+  /** Entries */
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
@@ -143,22 +135,21 @@ export default function Dashboard() {
       const entries: Entry[] = Array.isArray(data?.entries) ? data.entries : [];
 
       const nextMeals: Meal[] = initialMeals.map(m => ({ ...m, entries: [] }));
-      const byMeal = new Map(nextMeals.map(m => [m.label.toLowerCase(), m]));
+      const byMeal = new Map(nextMeals.map(m => [m.label, m]));
 
-      for (const e of entries) {
-        const label = String(e.meal || 'Other');
-        const key = label.toLowerCase();
-        const bucket = byMeal.get(key);
-        const entryData: Entry = {
-          id: String(e.id),
-          kcal: Number(e.kcal || 0),
-          photoUri: e.photoUri || undefined,
-          timestamp: Number(e.timestamp || Date.now()),
-          meal: label,
-        };
+      for (const raw of entries) {
+        // Coerce meal to one of the built-ins; unknowns => Other
+        const mealLabel = (BUILT_INS.includes(raw.meal) ? raw.meal : 'Other') as MealLabel;
+        const bucket = byMeal.get(mealLabel)!;
 
-        if (bucket) bucket.entries.push(entryData);
-        else nextMeals.push({ label, target: 300, entries: [entryData] });
+        bucket.entries.push({
+          id: String(raw.id ?? Math.random().toString(36).slice(2)),
+          kcal: Number(raw.kcal || 0),
+          photoUri: raw.photoUri || undefined,
+          timestamp: Number(raw.timestamp || Date.now()),
+          meal: mealLabel,
+          foodName: typeof raw.foodName === 'string' ? raw.foodName : undefined,
+        });
       }
 
       setMeals(nextMeals);
@@ -167,23 +158,25 @@ export default function Dashboard() {
     return () => unsub();
   }, [todayKey]);
 
-  /** Open Add modal */
+  /** Add modal */
   const openAdd = (meal?: MealLabel) => {
-    setActiveMeal(meal ?? 'Dinner');
+    setActiveMeal(meal ?? 'Breakfast');
     setEntryKcal('500');
     setPhotoUri(undefined);
     setAiResult(null);
+    setSuggestedFoodName(undefined);
     setPct(0);
     setBusy(false);
     setModalVisible(true);
   };
 
-  /** Native flow: pick → upload (util returns string URL) → Clarifai(URL) */
+  /** Native upload → Clarifai */
   const handleAddPhotoNative = async () => {
     try {
       setBusy(true);
       setPct(0);
       setAiResult(null);
+      setSuggestedFoodName(undefined);
 
       const url = await pickUploadAndSaveMeta(activeMeal);
       if (!url) return;
@@ -198,22 +191,10 @@ export default function Dashboard() {
         return;
       }
 
-      const top3 = concepts.slice(0, 3);
-      const msg = top3.map((c: Concept) => `${c.name} — ${Math.round((c.value ?? 0) * 100)}%`).join('\n');
-      const top = top3[0];
-      const CONF_THRESHOLD = 0.45;
-
-      if ((top.value ?? 0) >= CONF_THRESHOLD) {
-        Alert.alert('Food detected', msg, [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: `Use "${top.name}"`,
-            onPress: () => setActiveMeal(top.name.charAt(0).toUpperCase() + top.name.slice(1)),
-          },
-        ]);
-      } else {
-        Alert.alert('Low confidence', `Top guesses:\n${msg}`);
-      }
+      const top = concepts[0];
+      setSuggestedFoodName(top.name);        // <- store suggestion, do NOT change meal
+      // Optional toast-like info:
+      Alert.alert('Food detected', `${top.name} (${Math.round((top.value ?? 0) * 100)}% confidence)`);
     } catch (err) {
       console.error('Native upload+AI error:', err);
       Alert.alert('Error', 'Upload or recognition failed.');
@@ -222,10 +203,11 @@ export default function Dashboard() {
     }
   };
 
-  /** Button handler: web opens file input; native runs native flow */
+  /** Button: web picker vs native */
   const handleAddPhoto = async () => {
     if (Platform.OS === 'web') {
       setAiResult(null);
+      setSuggestedFoodName(undefined);
       setPct(0);
       webFileRef.current?.click();
       return;
@@ -233,7 +215,7 @@ export default function Dashboard() {
     await handleAddPhotoNative();
   };
 
-  /** Web: file → Storage (with progress) → Clarifai(URL) */
+  /** Web upload → Storage → Clarifai */
   const onWebFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -242,6 +224,7 @@ export default function Dashboard() {
       setBusy(true);
       setPct(0);
       setAiResult(null);
+      setSuggestedFoodName(undefined);
 
       const user = auth.currentUser;
       if (!user) {
@@ -255,7 +238,7 @@ export default function Dashboard() {
 
       const task = uploadBytesResumable(storageRefObj, file, {
         contentType: file.type || 'image/jpeg',
-        customMetadata: { meal: activeMeal || 'Unknown', uploadedBy: user.uid },
+        customMetadata: { meal: activeMeal, uploadedBy: user.uid },
       });
 
       const downloadURL: string = await new Promise<string>((resolve, reject) => {
@@ -275,26 +258,12 @@ export default function Dashboard() {
       setAiResult(result);
 
       const concepts = result?.concepts ?? [];
-      if (!concepts.length) {
-        Alert.alert('No suggestion', 'Could not identify food from the photo.');
-        return;
-      }
-
-      const top3 = concepts.slice(0, 3);
-      const msg = top3.map((c: Concept) => `${c.name} — ${Math.round((c.value ?? 0) * 100)}%`).join('\n');
-      const top = top3[0];
-      const CONF_THRESHOLD = 0.45;
-
-      if ((top.value ?? 0) >= CONF_THRESHOLD) {
-        Alert.alert('Food detected', msg, [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: `Use "${top.name}"`,
-            onPress: () => setActiveMeal(top.name.charAt(0).toUpperCase() + top.name.slice(1)),
-          },
-        ]);
+      if (concepts.length) {
+        const top = concepts[0];
+        setSuggestedFoodName(top.name);      // <- store suggestion, do NOT change meal
+        Alert.alert('Food detected', `${top.name} (${Math.round((top.value ?? 0) * 100)}% confidence)`);
       } else {
-        Alert.alert('Low confidence', `Top guesses:\n${msg}`);
+        Alert.alert('No suggestion', 'Could not identify food from the photo.');
       }
     } catch (err) {
       console.error('Web upload+AI error:', err);
@@ -305,7 +274,7 @@ export default function Dashboard() {
     }
   };
 
-  /** Stepper handlers */
+  /** kcal text + stepper */
   const setKcalFromText = (t: string) => {
     const cleaned = t.replace(/[^\d.]/g, '');
     const normalized = cleaned.split('.').slice(0, 2).join('.');
@@ -317,7 +286,7 @@ export default function Dashboard() {
     setEntryKcal(String(next));
   };
 
-  /** Save entry to Firestore */
+  /** Save entry */
   const saveEntry = async () => {
     const kcal = Number(entryKcal || 0);
     if (!kcal) {
@@ -331,15 +300,14 @@ export default function Dashboard() {
       kcal,
       photoUri: photoUri || '',
       timestamp: Date.now(),
-      meal: activeMeal || 'Unknown',
+      meal: activeMeal,           // <- NEVER replaced by AI
+      foodName: suggestedFoodName // <- keep the AI label here
     };
 
-    // Optimistic UI
+    // Optimistic UI into the chosen bucket only
     setMeals(prev =>
       prev.map(m =>
-        m.label.toLowerCase() === (activeMeal || 'Other').toLowerCase()
-          ? { ...m, entries: [newEntry, ...m.entries] }
-          : m
+        m.label === activeMeal ? { ...m, entries: [newEntry, ...m.entries] } : m
       )
     );
     setModalVisible(false);
@@ -366,7 +334,6 @@ export default function Dashboard() {
 
   const todayStr = dayjs().format('MMMM D, YYYY');
 
-  // Macro goals (0 if no goal set yet)
   const carbsGoal   = dailyGoal > 0 ? (dailyGoal * 0.50) / 4 : 0;
   const proteinGoal = dailyGoal > 0 ? (dailyGoal * 0.25) / 4 : 0;
   const fatGoal     = dailyGoal > 0 ? (dailyGoal * 0.25) / 9 : 0;
@@ -375,7 +342,6 @@ export default function Dashboard() {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
 
-      {/* Hidden web file input */}
       {Platform.OS === 'web' && (
         <input
           ref={webFileRef}
@@ -388,11 +354,7 @@ export default function Dashboard() {
 
       {/* Header */}
       <View style={styles.headerRow}>
-        <Image
-          source={require('../../assets/images/main_logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <Image source={require('../../assets/images/main_logo.png')} style={styles.logo} />
         <View style={{ flex: 1 }}>
           <Text style={styles.h1}>Today</Text>
           <Text style={styles.subtle}>{todayStr}</Text>
@@ -402,7 +364,7 @@ export default function Dashboard() {
         </Pressable>
       </View>
 
-      {/* Summary */}
+      {/* Summary card */}
       <View style={styles.card}>
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
@@ -410,7 +372,6 @@ export default function Dashboard() {
             <Text style={styles.summaryLabel}>Eaten</Text>
           </View>
 
-          {/* Donut with center action */}
           <Donut
             size={168}
             strokeWidth={12}
@@ -418,12 +379,10 @@ export default function Dashboard() {
             trackColor={COLORS.purpleLight}
             progressColor={COLORS.purple}
           >
-            {/* Center content becomes a button to set/edit goal */}
             <Pressable
               onPress={() => router.push('/four')}
               style={styles.donutCenter}
               accessibilityRole="button"
-              accessibilityLabel={dailyGoal > 0 ? 'Edit goal' : 'Set goal'}
             >
               {dailyGoal > 0 ? (
                 <>
@@ -452,7 +411,7 @@ export default function Dashboard() {
         </View>
       </View>
 
-      {/* MACRO PEBBLES */}
+      {/* Macros */}
       <View style={{ paddingHorizontal: 16, marginTop: -4, marginBottom: 8 }}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <MacroPebble label="Carbs"   value={0} goal={carbsGoal}   fill="#60A5FA" />
@@ -465,7 +424,7 @@ export default function Dashboard() {
       <FlatList
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 40 }}
         data={meals}
-        keyExtractor={(m) => m.label}
+        keyExtractor={(m, i) => `${m.label}-${i}`}  // <- guard against duplicates
         renderItem={({ item }) => {
           const consumed = item.entries.reduce((a, e) => a + e.kcal, 0);
           const pct = Math.min(1, item.target ? consumed / item.target : 0);
@@ -474,24 +433,14 @@ export default function Dashboard() {
             openAdd(item.label);
             setTimeout(() => handleAddPhoto(), 0);
           };
-          const onSearch = () => {
-            Alert.alert('Search', 'Open a search sheet or screen here.');
-          };
-          const onRecent = () => {
-            Alert.alert('Recent', 'Show a recent-items sheet here.');
-          };
+          const onSearch = () => Alert.alert('Search', 'Open search here.');
+          const onRecent = () => Alert.alert('Recent', 'Open recent items here.');
 
           return (
             <View style={styles.mealCard}>
               <View style={{ flex: 1, paddingRight: 12 }}>
                 <View style={styles.mealLeft}>
-                  <Donut
-                    size={44}
-                    strokeWidth={6}
-                    progress={pct}
-                    trackColor={COLORS.goldLight}
-                    progressColor={COLORS.purple}
-                  >
+                  <Donut size={44} strokeWidth={6} progress={pct} trackColor={COLORS.goldLight} progressColor={COLORS.purple}>
                     <View />
                   </Donut>
                   <View style={{ marginLeft: 12, flex: 1 }}>
@@ -499,8 +448,6 @@ export default function Dashboard() {
                     <Text style={styles.mealSub}>
                       {consumed} {item.target ? ` / ${item.target}` : ''} Cal
                     </Text>
-
-                    {/* Quick actions under the title */}
                     <QuickActionsRow onScan={onScan} onSearch={onSearch} onRecent={onRecent} />
                   </View>
                 </View>
@@ -514,37 +461,20 @@ export default function Dashboard() {
         }}
       />
 
-      {/* 🔻 Removed the floating FAB — now the plus is inside the donut */}
-      {/* <Pressable style={styles.fab} onPress={() => router.push('/four')}>
-        <Text style={styles.fabPlus}>＋</Text>
-      </Pressable> */}
-
-      {/* Modal */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
+      {/* Add entry modal */}
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.sheet}>
             <View style={styles.sheetHeader}>
-              <Pressable onPress={() => setModalVisible(false)}>
-                <Text style={styles.sheetCancel}>Cancel</Text>
-              </Pressable>
+              <Pressable onPress={() => setModalVisible(false)}><Text style={styles.sheetCancel}>Cancel</Text></Pressable>
               <Text style={styles.sheetTitle}>{activeMeal}</Text>
-              <Pressable onPress={saveEntry}>
-                <Text style={styles.sheetSave}>Save</Text>
-              </Pressable>
+              <Pressable onPress={saveEntry}><Text style={styles.sheetSave}>Save</Text></Pressable>
             </View>
 
-            {/* Editable kcal input + stepper */}
+            {/* editable kcal + stepper */}
             <View style={styles.kcalWrap}>
               <View style={styles.kcalInputRow}>
-                <Pressable
-                  onPress={() => adjustKcal(-KCAL_STEP)}
-                  style={[styles.stepperBtn, { backgroundColor: COLORS.mutedBg }]}
-                >
+                <Pressable onPress={() => adjustKcal(-KCAL_STEP)} style={[styles.stepperBtn, { backgroundColor: COLORS.mutedBg }]}>
                   <Text style={styles.stepperText}>–</Text>
                 </Pressable>
 
@@ -559,48 +489,34 @@ export default function Dashboard() {
                   maxLength={6}
                 />
 
-                <Pressable
-                  onPress={() => adjustKcal(+KCAL_STEP)}
-                  style={[styles.stepperBtn, { backgroundColor: COLORS.mutedBg }]}
-                >
+                <Pressable onPress={() => adjustKcal(+KCAL_STEP)} style={[styles.stepperBtn, { backgroundColor: COLORS.mutedBg }]}>
                   <Text style={styles.stepperText}>＋</Text>
                 </Pressable>
               </View>
               <Text style={styles.kcalUnit}>kcal</Text>
-              <Text style={styles.stepperHint}>Step: {KCAL_STEP}</Text>
+              {suggestedFoodName ? (
+                <Text style={{ marginTop: 6, color: COLORS.subtext }}>
+                  AI suggestion: <Text style={{ fontWeight: '700', color: COLORS.text }}>{suggestedFoodName}</Text>
+                </Text>
+              ) : null}
             </View>
 
-            {/* Photo button */}
+            {/* Photo */}
             <View style={[styles.suggestionsRow, { justifyContent: 'flex-start' }]}>
               <Pressable style={styles.photoBtn} onPress={handleAddPhoto}>
                 <Ionicons name="image-outline" size={22} color={COLORS.text} />
               </Pressable>
             </View>
 
-            {/* Progress */}
             {busy && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, marginTop: 4 }}>
-                <ActivityIndicator />
-                <Text>Uploading… {Math.round(pct * 100)}%</Text>
+                <ActivityIndicator /><Text>Uploading… {Math.round(pct * 100)}%</Text>
               </View>
             )}
 
-            {/* Preview */}
             {photoUri ? (
               <View style={{ marginTop: 12, alignItems: 'center' }}>
                 <Image source={{ uri: photoUri }} style={{ width: 120, height: 120, borderRadius: 10 }} />
-              </View>
-            ) : null}
-
-            {/* AI Concepts */}
-            {!busy && aiResult?.concepts?.length ? (
-              <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
-                <Text style={{ fontWeight: '700', color: COLORS.text, marginBottom: 6 }}>Top concepts</Text>
-                <Text selectable style={{ color: COLORS.subtext }}>
-                  {aiResult.concepts.slice(0, 5).map((c: Concept) =>
-                    `${c.name} — ${Math.round((c.value ?? 0) * 100)}%`
-                  ).join('\n')}
-                </Text>
               </View>
             ) : null}
           </View>
@@ -639,140 +555,51 @@ const styles = StyleSheet.create({
   summaryNumber: { fontSize: 18, fontWeight: '800', color: COLORS.text },
   summaryLabel: { fontSize: 12, color: COLORS.subtext, marginTop: 2 },
 
-  // ---- Donut center button styles ----
-  donutCenter: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
+  donutCenter: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   remaining: { fontSize: 22, fontWeight: '800', color: COLORS.text },
   remainingLabel: { fontSize: 12, color: COLORS.subtext },
-
   centerPlus: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.purple,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.purple,
+    alignItems: 'center', justifyContent: 'center',
   },
   centerPlusText: { color: '#fff', fontSize: 28, lineHeight: 28, marginTop: -2 },
-
   centerEditPill: {
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: COLORS.purple,
-    borderRadius: 999,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    marginTop: 8, paddingHorizontal: 10, paddingVertical: 6,
+    backgroundColor: COLORS.purple, borderRadius: 999, flexDirection: 'row',
+    alignItems: 'center', gap: 6,
   },
   centerEditText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 
   mealCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.paper, borderRadius: 16, padding: 14, marginBottom: 12,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
   mealLeft: { flexDirection: 'row', alignItems: 'center' },
   mealTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
   mealSub: { fontSize: 12, color: COLORS.subtext, marginTop: 2 },
-  addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  addBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.gold, alignItems: 'center', justifyContent: 'center' },
   addBtnPlus: { fontSize: 22, color: COLORS.purple, marginTop: -2 },
 
-  // (Removed FAB styles are left here in case you revert later)
-  // fab: {
-  //   position: 'absolute',
-  //   right: 20,
-  //   bottom: 24,
-  //   width: 60,
-  //   height: 60,
-  //   borderRadius: 30,
-  //   backgroundColor: COLORS.purple,
-  //   alignItems: 'center',
-  //   justifyContent: 'center',
-  //   shadowColor: '#000',
-  //   shadowOpacity: 0.18,
-  //   shadowRadius: 10,
-  //   shadowOffset: { width: 0, height: 6 },
-  //   elevation: 4,
-  // },
-  // fabPlus: { color: '#fff', fontSize: 32, marginTop: -4 },
-
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: COLORS.paper,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingBottom: Platform.OS === 'ios' ? 22 : 16,
-  },
+  sheet: { backgroundColor: COLORS.paper, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingBottom: Platform.OS === 'ios' ? 22 : 16 },
   sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
   },
   sheetCancel: { color: COLORS.subtext, fontSize: 16 },
   sheetTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
   sheetSave: { color: COLORS.purple, fontSize: 16, fontWeight: '700' },
+
   kcalWrap: { alignItems: 'center', marginTop: 8, marginBottom: 10 },
-  kcalInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+  kcalInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   kcalInput: {
-    fontSize: 44,
-    fontWeight: '800',
-    color: COLORS.text,
-    minWidth: 110,
-    textAlign: 'center',
-    paddingVertical: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    fontSize: 44, fontWeight: '800', color: COLORS.text, minWidth: 110, textAlign: 'center',
+    paddingVertical: 0, borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
   kcalUnit: { fontSize: 14, color: COLORS.subtext, marginTop: 2 },
-  stepperBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  stepperBtn: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   stepperText: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginTop: -2 },
-  stepperHint: { fontSize: 11, color: COLORS.subtext, marginTop: 4 },
-  suggestionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  photoBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: COLORS.mutedBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  suggestionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, marginBottom: 12 },
+  photoBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: COLORS.mutedBg, alignItems: 'center', justifyContent: 'center' },
 });
