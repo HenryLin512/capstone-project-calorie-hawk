@@ -2,15 +2,37 @@ import * as ImagePicker from 'expo-image-picker';
 import { Alert } from 'react-native';
 import Constants from 'expo-constants';
 
+
+
+async function safeGetApiKey() {
+  try {
+    const response = await fetch("https://getapikey-jrksbss7cq-uc.a.run.app");
+    const data = await response.text();
+    return data;
+  } catch (err) {
+    console.error("Safe fetch failed:", err);
+    return undefined;
+  }
+}
+
+
 // Read Clarifai PAT/API key from Expo config (extra) or environment. Prefer PAT for public clarifai/main access.
 const EXPO_EXTRA = (Constants.manifest as any)?.extra ?? (Constants as any)?.expoConfig?.extra;
-const CLARIFAI_PAT =
-  process.env.CLARIFAI_PAT ||
-  EXPO_EXTRA?.CLARIFAI_PAT ||
-  process.env.CLARIFAI_API_KEY ||
-  process.env.CLEARIFAI_API_KEY ||
-  EXPO_EXTRA?.CLARIFAI_API_KEY ||
-  EXPO_EXTRA?.CLARIFAI_KEY;
+
+let CLARIFAI_PAT = "";
+
+async function init() {
+  const API = await safeGetApiKey();
+  if (API) {
+    CLARIFAI_PAT = API;
+    console.log("CLARIFAI_PAT set to:", CLARIFAI_PAT);
+  } else {
+    console.error("Failed to get API key");
+  }
+}
+
+init();
+
 
 // Clarifai public app + model (stable version id recommended by Clarifai docs)
 const CLARIFAI_USER_ID = 'clarifai';
