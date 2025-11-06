@@ -1,26 +1,23 @@
+// app/(tabs)/four.tsx
 /**
- * ===============================================
- * Calorie Hawk - Goal Setup (four.tsx)
- * -----------------------------------------------
- * Allows users to set or schedule calorie goals
- * for specific days or weeks in advance.
- *
- * Integrates:
- *   - Firebase Firestore for goal storage
- *   - Dynamic linking from Dashboard (FAB)
- * ===============================================
+ * Calorie Hawk - Goal Setup
+ * - Keyboard-safe (KeyboardAvoidingView + safe-area insets)
+ * - Scrollable content so fields never get covered
  */
 
 import React, { useState } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   TextInput,
   Pressable,
   Alert,
   StyleSheet,
+  Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../FireBaseConfig';
 import dayjs from 'dayjs';
@@ -29,6 +26,7 @@ import { router } from 'expo-router';
 export default function GoalSetupScreen() {
   const [goal, setGoal] = useState('');
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const insets = useSafeAreaInsets();
 
   const saveGoal = async () => {
     const kcal = Number(goal);
@@ -61,40 +59,60 @@ export default function GoalSetupScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>📅 Set Calorie Goal</Text>
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={insets.top + 16}
+      >
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: (Platform.OS === 'ios' ? insets.bottom : 16) + 24 },
+          ]}
+        >
+          <Text style={styles.title}>📅 Set Calorie Goal</Text>
 
-      <Text style={styles.label}>Target Date</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="YYYY-MM-DD"
-        value={date}
-        onChangeText={setDate}
-      />
+          <Text style={styles.label}>Target Date</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="YYYY-MM-DD"
+            value={date}
+            onChangeText={setDate}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="next"
+          />
 
-      <Text style={styles.label}>Calorie Goal (kcal)</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        placeholder="e.g. 2200"
-        value={goal}
-        onChangeText={setGoal}
-      />
+          <Text style={styles.label}>Calorie Goal (kcal)</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
+            placeholder="e.g. 2200"
+            value={goal}
+            onChangeText={setGoal}
+            returnKeyType="done"
+            blurOnSubmit
+          />
 
-      <Pressable style={styles.saveBtn} onPress={saveGoal}>
-        <Text style={styles.saveText}>Save Goal</Text>
-      </Pressable>
+          <Pressable style={styles.saveBtn} onPress={saveGoal}>
+            <Text style={styles.saveText}>Save Goal</Text>
+          </Pressable>
 
-      <Pressable style={styles.cancelBtn} onPress={() => router.back()}>
-        <Text style={styles.cancelText}>Cancel</Text>
-      </Pressable>
+          <Pressable style={styles.cancelBtn} onPress={() => router.back()}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, justifyContent: 'center', backgroundColor: '#fff' },
-  title: { fontSize: 28, fontWeight: '800', marginBottom: 24, textAlign: 'center' },
+  safe: { flex: 1, backgroundColor: '#fff' },
+  content: { paddingHorizontal: 24, paddingTop: 12 },
+  title: { fontSize: 28, fontWeight: '800', marginVertical: 16, textAlign: 'center' },
   label: { fontSize: 16, marginTop: 14, color: '#444' },
   input: {
     borderWidth: 1,
@@ -103,6 +121,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 8,
     fontSize: 16,
+    backgroundColor: '#fff',
   },
   saveBtn: {
     backgroundColor: '#5B21B6',
@@ -112,9 +131,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  cancelBtn: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
+  cancelBtn: { alignItems: 'center', marginTop: 16 },
   cancelText: { color: '#6B6A75', fontSize: 15 },
 });
+
