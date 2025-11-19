@@ -19,10 +19,6 @@ import { router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import dayjs from 'dayjs';
 
-import Donut from '../../components/Donut';
-import MacroPebble from '@/components/MacroPebble';
-import QuickActionsRow from '@/components/QuickActionsRow';
-
 // Firebase
 import { auth, db, storage } from '../../FireBaseConfig';
 import {
@@ -43,6 +39,7 @@ import { scanFood } from '../../utils/foodRecognition';
 // UI helpers
 import MacroPebble from '@/components/MacroPebble';
 import QuickActionsRow from '@/components/QuickActionsRow';
+import Donut from '../../components/Donut';
 
 //Notification
 import * as Notifications from 'expo-notifications';
@@ -162,8 +159,6 @@ export default function Dashboard() {
     });
     return () => unsub();
   }, [todayKey]);
-
-  const todayStr = dayjs().format('MMMM D, YYYY');
 
   const openAdd = (meal?: MealLabel) => {
     setActiveMeal(meal ?? 'Breakfast');
