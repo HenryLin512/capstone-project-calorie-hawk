@@ -10,7 +10,8 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Image, Pressable, Modal, FlatList, Platform, Alert,
-  ActivityIndicator, TextInput, KeyboardAvoidingView, ScrollView, Keyboard,
+  ActivityIndicator, TextInput, KeyboardAvoidingView, ScrollView, Keyboard, Button,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -38,6 +39,17 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 // Utils
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
 import { scanFood } from '../../utils/foodRecognition';
+
+// UI helpers
+import MacroPebble from '@/components/MacroPebble';
+import QuickActionsRow from '@/components/QuickActionsRow';
+
+//Notification
+import * as Notifications from 'expo-notifications';
+import { registerForPushNotificationsAsync } from '../../utils/pushNotifications';
+
+type Concept = { id?: string; name: string; value?: number };
+type ScanResultLocal = { concepts?: Concept[] } | null;
 
 type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Other';
 
@@ -309,6 +321,14 @@ export default function Dashboard() {
     }
   };
 
+  const todayStr = dayjs().format('MMMM D, YYYY');
+
+  const carbsGoal   = dailyGoal > 0 ? (dailyGoal * 0.50) / 4 : 0;
+  const proteinGoal = dailyGoal > 0 ? (dailyGoal * 0.25) / 4 : 0;
+  const fatGoal     = dailyGoal > 0 ? (dailyGoal * 0.25) / 9 : 0;
+
+  
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
@@ -322,6 +342,7 @@ export default function Dashboard() {
           onChange={onWebFileChange}
         />
       )}
+
 
       {/* Header */}
       <View style={styles.headerRow}>
