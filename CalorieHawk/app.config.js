@@ -9,6 +9,7 @@ module.exports = () => ({
       CLARIFAI_PAT: process.env.CLARIFAI_PAT || "",
       // Keep API key fallbacks for compatibility
       CLARIFAI_API_KEY: process.env.CLARIFAI_API_KEY || process.env.CLEARIFAI_API_KEY || "",
+      "MACRO_API_BASE": "http://10.0.0.13:8000",
     },
   },
 });
