@@ -5,6 +5,7 @@
  * - KeyboardAvoidingView keeps input visible
  * - Firestore: entries array (no undefined fields) + totals.<meal> increment
  * - Donut center is properly centered
+ * - Macro estimate via utils/macros (FastAPI) — optional and persisted
  */
 
 import React, { useRef, useMemo, useState, useEffect } from 'react';
@@ -38,6 +39,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 // Utils
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
 import { scanFood } from '../../utils/foodRecognition';
+import { getMacros, type MacroServiceResponse } from '../../utils/macros';
 
 type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Other';
 
@@ -48,6 +50,13 @@ type Entry = {
   meal: MealLabel;
   photoUri?: string;
   foodName?: string;
+  macros?: {
+    kcal?: number | null;
+    protein_g?: number | null;
+    fat_g?: number | null;
+    carbs_g?: number | null;
+    basis?: 'per_100g' | 'scaled_per_grams';
+  };
 };
 
 type Meal = { label: MealLabel; target: number; entries: Entry[] };
@@ -95,8 +104,18 @@ export default function Dashboard() {
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
   const [suggestedFoodName, setSuggestedFoodName] = useState<string | undefined>(undefined);
 
+  // upload/AI
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
+
+  // macro estimate
+  const [macroBusy, setMacroBusy] = useState(false);
+  const [macroSnapshot, setMacroSnapshot] = useState<{
+    kcal?: number | null;
+    protein_g?: number | null;
+    fat_g?: number | null;
+    carbs_g?: number | null;
+  } | null>(null);
 
   const webFileRef = useRef<HTMLInputElement | null>(null);
   const todayKey = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
@@ -143,6 +162,16 @@ export default function Dashboard() {
           meal: mealLabel,
           ...(raw?.photoUri ? { photoUri: String(raw.photoUri) } : {}),
           ...(typeof raw?.foodName === 'string' ? { foodName: raw.foodName } : {}),
+          ...(raw?.macros ? {
+            macros: {
+              kcal: raw.macros.kcal ?? null,
+              protein_g: raw.macros.protein_g ?? null,
+              fat_g: raw.macros.fat_g ?? null,
+              carbs_g: raw.macros.carbs_g ?? null,
+              basis: raw.macros.basis === 'per_100g' ? 'per_100g'
+                    : (raw.macros.basis === 'scaled_per_grams' ? 'scaled_per_grams' : undefined),
+            }
+          } : {}),
         };
         bucket.entries.push(e);
       }
@@ -159,13 +188,14 @@ export default function Dashboard() {
     setMode('add');
     setPhotoUri(undefined);
     setSuggestedFoodName(undefined);
+    setMacroSnapshot(null);
     setBusy(false);
     setPct(0);
+    setMacroBusy(false);
     setModalVisible(true);
   };
 
   const setKcalFromText = (t: string) => {
-    // magnitude-only 0..999999
     if (/^\d{0,6}$/.test(t) || t === '') setEntryKcal(t);
   };
 
@@ -245,6 +275,42 @@ export default function Dashboard() {
     }
   };
 
+  const estimateMacros = async () => {
+    const q = (suggestedFoodName || '').toLowerCase().trim();
+    if (!q) {
+      Alert.alert('No food name', 'Add a photo or type a name first.');
+      return;
+    }
+    try {
+      setMacroBusy(true);
+      // heuristic default grams; later you can prompt the user
+      const grams = 154;
+
+      // You can flip includeSurvey to true if you want FNDDS fallback in edge cases
+      const res: MacroServiceResponse = await getMacros(q, { grams, includeSurvey: false });
+
+      const snap =
+        res?.scaled_per_grams ??
+        res?.per_100g ??
+        null;
+
+      setMacroSnapshot(snap);
+      if (snap) {
+        Alert.alert(
+          'Estimated macros',
+          `kcal: ${snap.kcal ?? '—'}\nProtein: ${snap.protein_g ?? '—'} g\nFat: ${snap.fat_g ?? '—'} g\nCarbs: ${snap.carbs_g ?? '—'} g`
+        );
+      } else {
+        Alert.alert('No macros', 'Could not estimate macros for this item.');
+      }
+    } catch (e: any) {
+      console.log('macro fetch error', e?.message || e);
+      Alert.alert('Macro service error', 'Check FastAPI server or network.');
+    } finally {
+      setMacroBusy(false);
+    }
+  };
+
   const saveEntry = async () => {
     const val = signedValue();
     if (!Number.isFinite(val) || val === 0) {
@@ -255,7 +321,17 @@ export default function Dashboard() {
     const id = Math.random().toString(36).slice(2);
     const timestamp = Date.now();
 
-    // Optimistic UI object (can keep undefined locally)
+    const macrosForDb = macroSnapshot
+      ? {
+          kcal: macroSnapshot.kcal ?? null,
+          protein_g: macroSnapshot.protein_g ?? null,
+          fat_g: macroSnapshot.fat_g ?? null,
+          carbs_g: macroSnapshot.carbs_g ?? null,
+          basis: 'scaled_per_grams' as const,
+        }
+      : undefined;
+
+    // Optimistic UI
     const optimistic: Entry = {
       id,
       kcal: val,
@@ -263,6 +339,7 @@ export default function Dashboard() {
       meal: activeMeal,
       ...(photoUri ? { photoUri } : {}),
       ...(suggestedFoodName ? { foodName: suggestedFoodName } : {}),
+      ...(macroSnapshot ? { macros: { ...macrosForDb } } : {}),
     };
 
     // Firestore object: strip undefined
@@ -274,8 +351,8 @@ export default function Dashboard() {
     };
     if (photoUri) entryForDb.photoUri = photoUri;
     if (suggestedFoodName) entryForDb.foodName = suggestedFoodName;
+    if (macrosForDb) entryForDb.macros = macrosForDb;
 
-    // Optimistic UI
     setMeals(prev =>
       prev.map(m => (m.label === activeMeal ? { ...m, entries: [optimistic, ...m.entries] } : m))
     );
@@ -298,7 +375,7 @@ export default function Dashboard() {
         { merge: true }
       );
 
-      // 2) per-meal running total (so History can show day/meal totals fast)
+      // 2) per-meal running total
       await updateDoc(dayDocRef, {
         [`totals.${activeMeal}`]: increment(val),
         lastUpdated: serverTimestamp(),
@@ -381,7 +458,7 @@ export default function Dashboard() {
         </View>
       </View>
 
-      {/* Macros (placeholder) */}
+      {/* Macros (placeholder; wire to real totals later) */}
       <View style={{ paddingHorizontal: 16, marginTop: -4, marginBottom: 8 }}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <MacroPebble label="Carbs"   value={0} goal={0} fill="#60A5FA" />
@@ -496,21 +573,40 @@ export default function Dashboard() {
                 ) : null}
               </View>
 
-              {/* Photo row */}
-              <View style={[styles.suggestionsRow, { justifyContent: 'flex-start' }]}>
+              {/* Photo & Macro buttons */}
+              <View style={[styles.suggestionsRow, { justifyContent: 'flex-start', gap: 12 }]}>
                 <Pressable style={styles.photoBtn} onPress={handleAddPhoto}>
                   <Ionicons name="image-outline" size={22} color={COLORS.text} />
                 </Pressable>
+
+                <Pressable
+                  style={[styles.photoBtn, { paddingHorizontal: 14 }]}
+                  onPress={estimateMacros}
+                  disabled={macroBusy}
+                >
+                  {macroBusy ? <ActivityIndicator /> : <Text style={{ fontWeight: '700', color: COLORS.text }}>Estimate macros</Text>}
+                </Pressable>
+
                 {busy && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <ActivityIndicator />
                     <Text style={{ marginLeft: 8 }}>{Math.round(pct * 100)}%</Text>
                   </View>
                 )}
+
                 {photoUri ? (
-                  <Image source={{ uri: photoUri }} style={{ width: 48, height: 48, borderRadius: 8, marginLeft: 12 }} />
+                  <Image source={{ uri: photoUri }} style={{ width: 48, height: 48, borderRadius: 8 }} />
                 ) : null}
               </View>
+
+              {macroSnapshot ? (
+                <View style={{ marginTop: 8, paddingHorizontal: 16 }}>
+                  <Text style={{ fontWeight: '700', marginBottom: 4 }}>Estimated macros (scaled):</Text>
+                  <Text style={{ color: COLORS.subtext }}>
+                    kcal: {macroSnapshot.kcal ?? '—'} | P: {macroSnapshot.protein_g ?? '—'} g | F: {macroSnapshot.fat_g ?? '—'} g | C: {macroSnapshot.carbs_g ?? '—'} g
+                  </Text>
+                </View>
+              ) : null}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -581,8 +677,9 @@ const styles = StyleSheet.create({
   stepperText: { fontSize: 28, fontWeight: '700', color: COLORS.text, marginTop: -2 },
 
   suggestionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, marginBottom: 12 },
-  photoBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: COLORS.mutedBg, alignItems: 'center', justifyContent: 'center' },
+  photoBtn: { minWidth: 48, height: 48, paddingHorizontal: 12, borderRadius: 12, backgroundColor: COLORS.mutedBg, alignItems: 'center', justifyContent: 'center' },
 });
+
 
 
 
