@@ -3,6 +3,9 @@ import { View, Text, TextInput, Pressable, StyleSheet, Alert, Modal } from "reac
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../FireBaseConfig";
 import { router } from "expo-router";
+import { createUserProfile } from "../utils/createUserProfile";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../FireBaseConfig";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -10,34 +13,73 @@ export default function Login() {
   const [signUpVisible, setSignUpVisible] = useState(false);
 
   // --- Login
+  // const handleLogin = async () => {
+  //   try {
+  //     const user = await signInWithEmailAndPassword(auth, email, password);
+  //     if (user) {
+  //       router.replace("/(tabs)/one");
+  //     }
+  //   } catch (error: any) {
+  //     Alert.alert("Login failed", error.message);
+  //   }
+  // };
   const handleLogin = async () => {
-    try {
-      const user = await signInWithEmailAndPassword(auth, email, password);
-      if (user) {
-        router.replace("/(tabs)/one");
-      }
-    } catch (error: any) {
-      Alert.alert("Login failed", error.message);
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // Check if profile exists
+    const ref = doc(db, "users", user.uid);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+      // Create missing profile for old accounts
+      await createUserProfile(user);
     }
-  };
+
+    router.replace("/(tabs)/one");
+  } catch (error: any) {
+    Alert.alert("Login failed", error.message);
+  }
+};
 
   // --- Sign Up
+  // const handleSignUp = async (signupEmail: string, signupPassword: string) => {
+  //   try {
+  //     const user = await createUserWithEmailAndPassword(auth, signupEmail, signupPassword);
+  //     if (user) {
+  //       Alert.alert("Success", "Account created!");
+  //       setSignUpVisible(false);
+  //       router.replace("/(tabs)/one");
+  //     }
+  //   } catch (error: any) {
+  //     if (error.code === "auth/email-already-in-use") {
+  //       Alert.alert("Sign Up failed", "This email is already registered. Try logging in.");
+  //     } else {
+  //       Alert.alert("Sign Up failed", error.message);
+  //     }
+  //   }
+  // };
   const handleSignUp = async (signupEmail: string, signupPassword: string) => {
-    try {
-      const user = await createUserWithEmailAndPassword(auth, signupEmail, signupPassword);
-      if (user) {
-        Alert.alert("Success", "Account created!");
-        setSignUpVisible(false);
-        router.replace("/(tabs)/one");
-      }
-    } catch (error: any) {
-      if (error.code === "auth/email-already-in-use") {
-        Alert.alert("Sign Up failed", "This email is already registered. Try logging in.");
-      } else {
-        Alert.alert("Sign Up failed", error.message);
-      }
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, signupEmail, signupPassword);
+    const user = userCredential.user;
+
+    // Create their profile in Firestore
+    await createUserProfile(user);
+
+    Alert.alert("Success", "Account created!");
+    setSignUpVisible(false);
+
+    router.replace("/(tabs)/one");
+  } catch (error: any) {
+    if (error.code === "auth/email-already-in-use") {
+      Alert.alert("Sign Up failed", "This email is already registered. Try logging in.");
+    } else {
+      Alert.alert("Sign Up failed", error.message);
     }
-  };
+  }
+};
 
   // --- Sign Up form state
   const [signupEmail, setSignupEmail] = useState("");
