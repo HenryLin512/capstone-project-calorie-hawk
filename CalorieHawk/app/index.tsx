@@ -3,6 +3,13 @@ import {View,Text,TextInput,Pressable,StyleSheet,Alert,Modal,} from "react-nativ
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword,} from "firebase/auth";
 import { auth } from "../FireBaseConfig";
 import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
+import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+
+WebBrowser.maybeCompleteAuthSession();
+
+
 
 
 import Colors from "../constants/Colors";
@@ -31,6 +38,24 @@ export default function Login() {
       Alert.alert("Login failed", error.message);
     }
   };
+  const [request, response, promptAsync] = Google.useAuthRequest({
+  clientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
+  iosClientId: "872994424947-l4hp1g84blq35emc8krc3i03ae8ich30.apps.googleusercontent.com",
+  androidClientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
+});
+
+React.useEffect(() => {
+  if (response?.type === "success") {
+    const { id_token } = response.params;
+    const credential = GoogleAuthProvider.credential(id_token);
+    signInWithCredential(auth, credential)
+      .then(() => router.replace("/(tabs)/one"))
+      .catch((error) =>
+        Alert.alert("Google Sign-In failed", error.message)
+      );
+  }
+}, [response]);
+
 
   // --- Sign Up
   const handleSignUp = async (
@@ -105,6 +130,22 @@ export default function Login() {
         onPress={handleLogin}
       >
         <Text style={styles.buttonText}>Login</Text>
+      </Pressable>
+
+      <Pressable
+        disabled={!request}
+        onPress={() => promptAsync()}
+        style={{
+          backgroundColor: "#fff",
+          padding: 12,
+          borderRadius: 8,
+          marginTop: 10,
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ color: "#000", fontWeight: "600" }}>
+          Sign in with Google
+        </Text>
       </Pressable>
 
       <Pressable onPress={() => setSignUpVisible(true)}>
