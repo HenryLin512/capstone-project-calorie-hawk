@@ -54,7 +54,13 @@ export default function Login() {
       // Create missing profile for old accounts
       await createUserProfile(user);
     }
+
+    router.replace("/(tabs)/one");
+    } catch (error: any) {
+      Alert.alert("Login failed", error.message);
+    }
   };
+
   const [request, response, promptAsync] = Google.useAuthRequest({
   clientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
   iosClientId: "872994424947-l4hp1g84blq35emc8krc3i03ae8ich30.apps.googleusercontent.com",
@@ -73,38 +79,6 @@ React.useEffect(() => {
   }
 }, [response]);
 
-
-  // --- Sign Up
-  const handleSignUp = async (
-    signupEmail: string,
-    signupPassword: string
-  ) => {
-    try {
-      const user = await createUserWithEmailAndPassword(
-        auth,
-        signupEmail,
-        signupPassword
-      );
-      if (user) {
-        Alert.alert("Success", "Account created!");
-        setSignUpVisible(false);
-        router.replace("/(tabs)/one");
-      }
-    } catch (error: any) {
-      if (error.code === "auth/email-already-in-use") {
-        Alert.alert(
-          "Sign Up failed",
-          "This email is already registered. Try logging in."
-        );
-      } else {
-        Alert.alert("Sign Up failed", error.message);
-      }
-
-    router.replace("/(tabs)/one");
-  } catch (error: any) {
-    Alert.alert("Login failed", error.message);
-  }
-};
 
   // --- Sign Up
   // const handleSignUp = async (signupEmail: string, signupPassword: string) => {
