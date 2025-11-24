@@ -1,165 +1,220 @@
+// app/(tabs)/three.tsx
+/**
+ * History (real-time)
+ * - Live updates via onSnapshot on /calories and /photos
+ * - Day totals = signed sum of entries[].kcal (so Subtract works)
+ * - Aggregations: Day / ISO Week / Month / Year
+ */
+
+import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, FlatList, TouchableOpacity, Text, View, Image, ActivityIndicator } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+dayjs.extend(isoWeek);
+
 import { auth, db } from '../../FireBaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
+
+type ViewType = 'day' | 'week' | 'month' | 'year';
 
 const monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December'
 ];
 
-const parseDate = (dateStr: string) => {
-  const [y, m, d] = dateStr.split('-').map(n => parseInt(n, 10));
-  return new Date(y, (m - 1), d);
+const parseYMD = (s: string) => {
+  const [y,m,d] = s.split('-').map(n => parseInt(n, 10));
+  return new Date(y, m - 1, d);
 };
 
+type DayRow = { date: string; calories: number; photos: string[] };
+
 export default function HistoryTab() {
-  const [viewType, setViewType] = useState<'day' | 'week' | 'month' | 'year'>('day');
-  const [displayData, setDisplayData] = useState<any[]>([]);
-  const [allData, setAllData] = useState<{ date: string; calories: number; photos: string[] }[]>([]);
+  const [viewType, setViewType] = useState<ViewType>('day');
   const [loading, setLoading] = useState(true);
 
+  // authoritative day map we keep in sync in real time
+  const [dayMap, setDayMap] = useState<Record<string, DayRow>>({});
+
+  // subscribe once, then keep state fresh
   useEffect(() => {
-    const run = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        setAllData([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-
-        // --- Fetch calories ---
-        const calCol = collection(db, 'users', user.uid, 'calories');
-        const calSnap = await getDocs(calCol);
-        const calorieMap: Record<string, number> = {};
-        calSnap.docs.forEach(d => {
-          const entries: any[] = Array.isArray(d.data()?.entries) ? d.data().entries : [];
-          const total = entries.reduce((acc, e) => acc + Number(e?.kcal || 0), 0);
-          calorieMap[d.id] = total;
-        });
-
-        // --- Fetch photos ---
-        const photoCol = collection(db, 'users', user.uid, 'photos');
-        const photoSnap = await getDocs(photoCol);
-        const photoMap: Record<string, string[]> = {};
-        photoSnap.docs.forEach(d => {
-          const photos: any[] = Array.isArray(d.data()?.photos) ? d.data().photos : [];
-          photoMap[d.id] = photos.map(p => p.url);
-        });
-
-        // --- Combine data by date ---
-        const allDates = new Set([...Object.keys(calorieMap), ...Object.keys(photoMap)]);
-        const combined = Array.from(allDates).map(date => ({
-          date,
-          calories: calorieMap[date] || 0,
-          photos: photoMap[date] || [],
-        }));
-
-        combined.sort((a, b) => a.date.localeCompare(b.date));
-        setAllData(combined);
-      } catch (e) {
-        console.log('Error fetching history:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    run();
-  }, []);
-
-  // Filter/aggregate display
-  useEffect(() => {
-    if (!allData.length) {
-      setDisplayData([]);
+    const user = auth.currentUser;
+    if (!user) {
+      setDayMap({});
+      setLoading(false);
       return;
     }
 
+    setLoading(true);
+
+    const calCol = collection(db, 'users', user.uid, 'calories');
+    const photosCol = collection(db, 'users', user.uid, 'photos');
+
+    // helper to safely update dayMap
+    const updateDay = (date: string, patch: Partial<DayRow>) => {
+      setDayMap(prev => {
+        const prevRow = prev[date] ?? { date, calories: 0, photos: [] };
+        const nextRow: DayRow = {
+          date,
+          calories: patch.calories != null ? patch.calories : prevRow.calories,
+          photos: patch.photos != null ? patch.photos : prevRow.photos,
+        };
+        return { ...prev, [date]: nextRow };
+      });
+    };
+
+    const unsubCal = onSnapshot(
+      calCol,
+      (snap) => {
+        snap.docChanges().forEach((chg) => {
+          const date = chg.doc.id; // YYYY-MM-DD
+          const data = chg.doc.data() as any;
+          // signed sum of entries[].kcal (falls back to 0)
+          const entries = Array.isArray(data?.entries) ? data.entries : [];
+          const sum = entries.reduce((acc: number, e: any) => acc + Number(e?.kcal || 0), 0);
+
+          if (chg.type === 'removed') {
+            setDayMap(prev => {
+              const copy = { ...prev };
+              delete copy[date];
+              return copy;
+            });
+          } else {
+            updateDay(date, { calories: sum });
+          }
+        });
+        setLoading(false);
+      },
+      (err) => {
+        console.log('calories onSnapshot error:', err);
+        setLoading(false);
+      }
+    );
+
+    const unsubPhotos = onSnapshot(
+      photosCol,
+      (snap) => {
+        snap.docChanges().forEach((chg) => {
+          const date = chg.doc.id; // YYYY-MM-DD
+          if (chg.type === 'removed') {
+            // If photo doc deleted, remove photos array for that date (keep calories if any)
+            updateDay(date, { photos: [] });
+          } else {
+            const data = chg.doc.data() as any;
+            const photos: string[] = (Array.isArray(data?.photos) ? data.photos : [])
+              .map((p: any) => p?.url)
+              .filter(Boolean);
+            updateDay(date, { photos });
+          }
+        });
+      },
+      (err) => console.log('photos onSnapshot error:', err)
+    );
+
+    return () => {
+      unsubCal();
+      unsubPhotos();
+    };
+  }, []);
+
+  // convert map -> sorted array (DESC by date)
+  const allDays: DayRow[] = useMemo(() => {
+    const rows = Object.values(dayMap);
+    rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return rows;
+  }, [dayMap]);
+
+  // compute display data for selected view
+  const displayData = useMemo(() => {
     if (viewType === 'day') {
-      setDisplayData(allData.map(item => ({
-        label: item.date,
-        calories: item.calories,
-        photos: item.photos,
-      })));
-      return;
+      return allDays.map(d => ({ label: d.date, calories: d.calories, photos: d.photos }));
     }
 
     if (viewType === 'week') {
-      const weeks: { week: number; calories: number }[] = [];
-      allData.forEach((item, index) => {
-        const weekIndex = Math.floor(index / 7);
-        if (!weeks[weekIndex]) weeks[weekIndex] = { week: weekIndex + 1, calories: 0 };
-        weeks[weekIndex].calories += item.calories;
+      const acc: Record<string, number> = {};
+      allDays.forEach(item => {
+        const d = dayjs(item.date);
+        const key = `${d.isoWeekYear()}-W${String(d.isoWeek()).padStart(2, '0')}`;
+        acc[key] = (acc[key] || 0) + item.calories;
       });
-      setDisplayData(weeks.map(w => ({ label: `Week ${w.week}`, calories: w.calories, photos: [] })));
-      return;
+      return Object.entries(acc)
+        .sort(([a],[b]) => (a < b ? 1 : -1))
+        .map(([label, calories]) => ({ label, calories, photos: [] }));
     }
 
     if (viewType === 'month') {
-      const months: Record<string, number> = {};
-      allData.forEach(item => {
-        const d = parseDate(item.date);
+      const acc: Record<string, number> = {};
+      allDays.forEach(item => {
+        const d = parseYMD(item.date);
         const key = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
-        months[key] = (months[key] || 0) + item.calories;
+        acc[key] = (acc[key] || 0) + item.calories;
       });
-      setDisplayData(Object.entries(months).map(([label, calories]) => ({ label, calories, photos: [] })));
-      return;
+      return Object.entries(acc)
+        .sort(([a],[b]) => (a < b ? 1 : -1))
+        .map(([label, calories]) => ({ label, calories, photos: [] }));
     }
 
-    if (viewType === 'year') {
-      const years: Record<string, number> = {};
-      allData.forEach(item => {
-        const d = parseDate(item.date);
-        const key = String(d.getFullYear());
-        years[key] = (years[key] || 0) + item.calories;
-      });
-      setDisplayData(Object.entries(years).map(([label, calories]) => ({ label, calories, photos: [] })));
-      return;
-    }
-  }, [viewType, allData]);
+    // year
+    const acc: Record<string, number> = {};
+    allDays.forEach(item => {
+      const d = parseYMD(item.date);
+      const key = String(d.getFullYear());
+      acc[key] = (acc[key] || 0) + item.calories;
+    });
+    return Object.entries(acc)
+      .sort(([a],[b]) => (a < b ? 1 : -1))
+      .map(([label, calories]) => ({ label, calories, photos: [] }));
+  }, [viewType, allDays]);
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <SafeAreaView style={styles.center}>
         <ActivityIndicator />
         <Text style={{ marginTop: 6 }}>Loading history…</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>History</Text>
 
       {/* Toggle buttons */}
       <View style={styles.buttonsContainer}>
-        {(['day', 'week', 'month', 'year'] as const).map(type => (
-          <TouchableOpacity
-            key={type}
-            style={[styles.button, viewType === type && styles.activeButton]}
-            onPress={() => setViewType(type)}
-          >
-            <Text style={styles.buttonText}>{type.toUpperCase()}</Text>
-          </TouchableOpacity>
-        ))}
+        {(['day', 'week', 'month', 'year'] as const).map(type => {
+          const active = viewType === type;
+          return (
+            <TouchableOpacity
+              key={type}
+              style={[styles.button, active && styles.activeButton]}
+              onPress={() => setViewType(type)}
+            >
+              <Text style={[styles.buttonText, { color: active ? '#fff' : '#111' }]}>
+                {type.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {/* List of entries */}
+      {/* List */}
       <FlatList
         data={displayData}
-        keyExtractor={(_, idx) => String(idx)}
+        keyExtractor={(it, idx) => `${it.label}-${idx}`}
         renderItem={({ item }) => (
           <View style={styles.card}>
             <View style={{ flex: 1 }}>
               <Text style={styles.date}>{item.label}</Text>
-              <Text style={styles.calories}>{item.calories} cal</Text>
+              <Text style={[styles.calories, { color: item.calories >= 0 ? '#16A34A' : '#DC2626' }]}>
+                {item.calories >= 0 ? '+' : '–'}
+                {Math.abs(item.calories)} cal
+              </Text>
 
-              {/* Thumbnails */}
               {item.photos?.length ? (
                 <View style={styles.photoRow}>
-                  {item.photos.slice(0, 4).map((url: string, idx: number) => (
-                    <Image key={idx} source={{ uri: url }} style={styles.thumb} />
+                  {item.photos.slice(0, 6).map((url: string, idx: number) => (
+                    <Image key={`${url}-${idx}`} source={{ uri: url }} style={styles.thumb} />
                   ))}
                 </View>
               ) : null}
@@ -169,43 +224,36 @@ export default function HistoryTab() {
         ListEmptyComponent={<Text style={styles.empty}>No data available</Text>}
         contentContainerStyle={{ padding: 16, paddingTop: 6 }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  container: { flex: 1, alignItems: 'center', paddingTop: 12, backgroundColor: '#fff' },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-    alignSelf: 'stretch',
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+
+  container: { flex: 1, backgroundColor: '#fff' },
+  title: { fontSize: 24, fontWeight: '800', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+
+  buttonsContainer: {
+    flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10,
+    paddingHorizontal: 12,
   },
-  buttonsContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16, alignSelf: 'stretch', paddingHorizontal: 16 },
-  button: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#eee' },
+  button: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#eee' },
   activeButton: { backgroundColor: '#5B21B6' },
-  buttonText: { color: '#fff', fontWeight: 'bold' },
+  buttonText: { fontWeight: '700' },
+
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 12,
-    alignSelf: 'stretch',
-    // shadow
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12, marginHorizontal: 16,
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
-  date: { fontSize: 18, fontWeight: '600', marginBottom: 4 },
-  calories: { fontSize: 16, color: '#4CAF50', marginBottom: 6 },
+  date: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  calories: { fontSize: 16, fontWeight: '800', marginBottom: 6 },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   thumb: { width: 60, height: 60, borderRadius: 8 },
-  empty: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#888' },
+  empty: { textAlign: 'center', marginTop: 40, fontSize: 16, color: '#888' },
 });
+
+
 
 // DO NOT DELETE THIS since I can reuse some of it later
 //fetch from Firestore
