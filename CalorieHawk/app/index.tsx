@@ -6,6 +6,8 @@ import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import { sendPasswordResetEmail } from "firebase/auth";
+
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -38,6 +40,22 @@ export default function Login() {
       Alert.alert("Login failed", error.message);
     }
   };
+  const handleForgotPassword = async () => {
+  if (!email) {
+    Alert.alert("Enter your email", "Please type your email to reset your password.");
+    return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    Alert.alert(
+      "Password reset",
+      "A password reset link has been sent to your email."
+    );
+  } catch (error: any) {
+    Alert.alert("Error", error.message);
+  }
+};
+
   const [request, response, promptAsync] = Google.useAuthRequest({
   clientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
   iosClientId: "872994424947-l4hp1g84blq35emc8krc3i03ae8ich30.apps.googleusercontent.com",
@@ -130,6 +148,10 @@ React.useEffect(() => {
         onPress={handleLogin}
       >
         <Text style={styles.buttonText}>Login</Text>
+      </Pressable>
+
+      <Pressable onPress={handleForgotPassword}>
+        <Text style={[styles.link, { color: theme.tint }]}>Forgot Password?</Text>
       </Pressable>
 
       <Pressable
