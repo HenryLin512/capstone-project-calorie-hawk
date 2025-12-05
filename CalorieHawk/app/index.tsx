@@ -8,9 +8,14 @@ import * as Google from "expo-auth-session/providers/google";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { Image } from "react-native";
+import * as AuthSession from "expo-auth-session";
 
 WebBrowser.maybeCompleteAuthSession();
-
+  
+  const redirectUri = AuthSession.makeRedirectUri({
+  scheme: "caloriehawk",
+  path: "",
+});
 
 
 
@@ -60,6 +65,7 @@ export default function Login() {
   clientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
   iosClientId: "872994424947-l4hp1g84blq35emc8krc3i03ae8ich30.apps.googleusercontent.com",
   androidClientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
+  redirectUri,
 });
 
 React.useEffect(() => {
