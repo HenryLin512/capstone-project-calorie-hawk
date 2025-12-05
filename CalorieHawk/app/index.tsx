@@ -16,6 +16,7 @@ WebBrowser.maybeCompleteAuthSession();
   scheme: "caloriehawk",
   path: "",
 });
+  console.log("REDIRECT URI:", redirectUri);
 
 
 
