@@ -57,9 +57,9 @@ export default function Login() {
 };
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-  clientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
+  clientId: "872994424947-nv29btnjsmrvg5b1o6s3q35kftm883f5.apps.googleusercontent.com",
   iosClientId: "872994424947-l4hp1g84blq35emc8krc3i03ae8ich30.apps.googleusercontent.com",
-  androidClientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
+  androidClientId: "872994424947-nv29btnjsmrvg5b1o6s3q35kftm883f5.apps.googleusercontent.com",
 });
 
 React.useEffect(() => {
