@@ -7,7 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import { sendPasswordResetEmail } from "firebase/auth";
-
+import { Image } from "react-native";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -157,18 +157,17 @@ React.useEffect(() => {
       <Pressable
         disabled={!request}
         onPress={() => promptAsync()}
-        style={{
-          backgroundColor: "#fff",
-          padding: 12,
-          borderRadius: 8,
-          marginTop: 10,
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ color: "#000", fontWeight: "600" }}>
-          Sign in with Google
-        </Text>
+        style={styles.googleButton}
+>
+      <View style={styles.googleContent}>
+        <Image
+          source={require("../assets/images/google-icon.png")}
+          style={styles.googleIcon}
+        />
+      <Text style={styles.googleText}>Sign in with Google</Text>
+      </View>
       </Pressable>
+
 
       <Pressable onPress={() => setSignUpVisible(true)}>
         <Text style={[styles.link, { color: theme.tint }]}>
@@ -273,4 +272,32 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: "center",
   },
+  googleButton: {
+    backgroundColor: "#fff",
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    marginTop: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 10,
+  },
+  googleText: {
+    color: "#000",
+    fontWeight: "600",
+    fontSize: 15,
+  },
 });
+
+
+
