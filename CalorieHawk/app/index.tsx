@@ -154,6 +154,8 @@ React.useEffect(() => {
         <Text style={[styles.link, { color: theme.tint }]}>Forgot Password?</Text>
       </Pressable>
 
+        <View style={styles.divider} />
+
       <Pressable
         disabled={!request}
         onPress={() => promptAsync()}
@@ -297,6 +299,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 15,
   },
+  divider: {
+  height: 1,
+  backgroundColor: "#ccc",
+  marginVertical: 18,
+  opacity: 0.4,
+},
+
 });
 
 
