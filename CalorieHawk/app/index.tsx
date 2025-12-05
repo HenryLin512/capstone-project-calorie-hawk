@@ -9,14 +9,18 @@ import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { Image } from "react-native";
 import * as AuthSession from "expo-auth-session";
+import Constants from "expo-constants";
 
 WebBrowser.maybeCompleteAuthSession();
   
   const redirectUri = AuthSession.makeRedirectUri({
   scheme: "caloriehawk",
-  path: "",
 });
-  console.log("REDIRECT URI:", redirectUri);
+  const finalRedirectUri = Constants.appOwnership === "expo"
+  ? `https://auth.expo.dev/@koo24444/CalorieHawk`
+  : redirectUri;
+
+  console.log("REDIRECT URI:", finalRedirectUri);
 
 
 
@@ -66,7 +70,7 @@ export default function Login() {
   clientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
   iosClientId: "872994424947-l4hp1g84blq35emc8krc3i03ae8ich30.apps.googleusercontent.com",
   androidClientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
-  redirectUri,
+  redirectUri: finalRedirectUri,
 });
 
 React.useEffect(() => {
