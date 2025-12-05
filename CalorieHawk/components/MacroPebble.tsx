@@ -33,20 +33,14 @@ const MacroPebble: React.FC<MacroPebbleProps> = ({
   labelStyle,
   valueStyle,
 }) => {
-  const pct = goal > 0 ? clamp01(value / goal) : 0;
-
   return (
     <View style={[styles.pebble, compact && styles.pebbleCompact, style]}>
       <Text style={[styles.label, labelStyle]}>
         {label}{subtitle ? <Text style={styles.subtitle}> {subtitle}</Text> : null}
       </Text>
 
-      <View style={[styles.rail, compact && styles.railCompact]}>
-        <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: fill }]} />
-      </View>
-
       <Text style={[styles.value, valueStyle]}>
-        {Math.round(value)}{goal > 0 ? ` / ${Math.round(goal)} g` : ' g'}
+        {Math.round(value)} g
       </Text>
     </View>
   );

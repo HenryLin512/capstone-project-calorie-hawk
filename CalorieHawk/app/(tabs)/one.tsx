@@ -38,6 +38,8 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 // Utils
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
 import { scanFood } from '../../utils/foodRecognition';
+import { fetchNutritionForFood } from '../../utils/nutrition';
+import { fetchCaloriesForFood } from '../../utils/nutrition';
 
 type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Other';
 
@@ -48,6 +50,9 @@ type Entry = {
   meal: MealLabel;
   photoUri?: string;
   foodName?: string;
+  protein?: number;    // grams
+  fat?: number;        // grams
+  carbs?: number;      // grams
 };
 
 type Meal = { label: MealLabel; target: number; entries: Entry[] };
@@ -94,6 +99,9 @@ export default function Dashboard() {
   const [mode, setMode] = useState<'add' | 'sub'>('add');
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
   const [suggestedFoodName, setSuggestedFoodName] = useState<string | undefined>(undefined);
+  const [entryProtein, setEntryProtein] = useState<number>(0);
+  const [entryFat, setEntryFat] = useState<number>(0);
+  const [entryCarbs, setEntryCarbs] = useState<number>(0);
 
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
@@ -107,6 +115,25 @@ export default function Dashboard() {
   );
   const remaining = Math.max(0, dailyGoal > 0 ? dailyGoal - eatenCalories : 0);
   const remainingPct = dailyGoal > 0 ? remaining / dailyGoal : 0;
+
+  const { totalProtein, totalFat, totalCarbs } = useMemo(() => {
+    let protein = 0, fat = 0, carbs = 0;
+    for (const m of meals) {
+      for (const e of m.entries) {
+        protein += e.protein ?? 0;
+        fat += e.fat ?? 0;
+        carbs += e.carbs ?? 0;
+      }
+    }
+    return { totalProtein: protein, totalFat: fat, totalCarbs: carbs };
+  }, [meals]);
+
+  // Show macro totals only (no progress bar): set goals to 0
+  const MACRO_GOALS = {
+    carbs: 0,
+    protein: 0,
+    fat: 0,
+  };
 
   // Goal listener
   useEffect(() => {
@@ -143,6 +170,9 @@ export default function Dashboard() {
           meal: mealLabel,
           ...(raw?.photoUri ? { photoUri: String(raw.photoUri) } : {}),
           ...(typeof raw?.foodName === 'string' ? { foodName: raw.foodName } : {}),
+          ...(typeof raw?.protein === 'number' ? { protein: raw.protein } : {}),
+          ...(typeof raw?.fat === 'number' ? { fat: raw.fat } : {}),
+          ...(typeof raw?.carbs === 'number' ? { carbs: raw.carbs } : {}),
         };
         bucket.entries.push(e);
       }
@@ -159,6 +189,9 @@ export default function Dashboard() {
     setMode('add');
     setPhotoUri(undefined);
     setSuggestedFoodName(undefined);
+    setEntryProtein(0);
+    setEntryFat(0);
+    setEntryCarbs(0);
     setBusy(false);
     setPct(0);
     setModalVisible(true);
@@ -191,7 +224,21 @@ export default function Dashboard() {
       setPhotoUri(url);
       const result = await scanFood({ imageUrl: url });
       const top = result?.concepts?.[0];
-      if (top) setSuggestedFoodName(top.name);
+      if (top) {
+        setSuggestedFoodName(top.name);
+        try {
+          const nutrition = await fetchNutritionForFood(top.name);
+          if (nutrition.source !== 'none') {
+            if (nutrition.calories) setEntryKcal(String(Math.round(nutrition.calories)));
+            setEntryProtein(Math.round(nutrition.protein ?? 0));
+            setEntryFat(Math.round(nutrition.fat ?? 0));
+            setEntryCarbs(Math.round(nutrition.carbs ?? 0));
+          }
+        } catch (e) {
+          // Soft-fail: leave nutrition unchanged if lookup fails
+          console.warn('Nutrition lookup failed (native):', e);
+        }
+      }
     } catch (e) {
       console.error('Native upload+AI error:', e);
       Alert.alert('Error', 'Upload or recognition failed.');
@@ -235,7 +282,20 @@ export default function Dashboard() {
       setPhotoUri(downloadURL);
       const result = await scanFood({ imageUrl: downloadURL });
       const top = result?.concepts?.[0];
-      if (top) setSuggestedFoodName(top.name);
+      if (top) {
+        setSuggestedFoodName(top.name);
+        try {
+          const nutrition = await fetchNutritionForFood(top.name);
+          if (nutrition.source !== 'none') {
+            if (nutrition.calories) setEntryKcal(String(Math.round(nutrition.calories)));
+            setEntryProtein(Math.round(nutrition.protein ?? 0));
+            setEntryFat(Math.round(nutrition.fat ?? 0));
+            setEntryCarbs(Math.round(nutrition.carbs ?? 0));
+          }
+        } catch (e) {
+          console.warn('Nutrition lookup failed (web):', e);
+        }
+      }
     } catch (e) {
       console.error('Web upload+AI error:', e);
       Alert.alert('Error', 'Upload or recognition failed.');
@@ -263,6 +323,9 @@ export default function Dashboard() {
       meal: activeMeal,
       ...(photoUri ? { photoUri } : {}),
       ...(suggestedFoodName ? { foodName: suggestedFoodName } : {}),
+      ...(entryProtein ? { protein: entryProtein } : {}),
+      ...(entryFat ? { fat: entryFat } : {}),
+      ...(entryCarbs ? { carbs: entryCarbs } : {}),
     };
 
     // Firestore object: strip undefined
@@ -274,6 +337,9 @@ export default function Dashboard() {
     };
     if (photoUri) entryForDb.photoUri = photoUri;
     if (suggestedFoodName) entryForDb.foodName = suggestedFoodName;
+    if (entryProtein) entryForDb.protein = entryProtein;
+    if (entryFat) entryForDb.fat = entryFat;
+    if (entryCarbs) entryForDb.carbs = entryCarbs;
 
     // Optimistic UI
     setMeals(prev =>
@@ -381,12 +447,12 @@ export default function Dashboard() {
         </View>
       </View>
 
-      {/* Macros (placeholder) */}
+      {/* Macros */}
       <View style={{ paddingHorizontal: 16, marginTop: -4, marginBottom: 8 }}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <MacroPebble label="Carbs"   value={0} goal={0} fill="#60A5FA" />
-          <MacroPebble label="Protein" value={0} goal={0} fill="#22C55E" />
-          <MacroPebble label="Fat"     value={0} goal={0} fill="#F59E0B" />
+          <MacroPebble label="Carbs"   value={totalCarbs}   goal={MACRO_GOALS.carbs}   fill="#60A5FA" />
+          <MacroPebble label="Protein" value={totalProtein} goal={MACRO_GOALS.protein} fill="#22C55E" />
+          <MacroPebble label="Fat"     value={totalFat}     goal={MACRO_GOALS.fat}     fill="#F59E0B" />
         </View>
       </View>
 

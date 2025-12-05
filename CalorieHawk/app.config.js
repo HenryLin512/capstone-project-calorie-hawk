@@ -9,6 +9,9 @@ module.exports = () => ({
       CLARIFAI_PAT: process.env.CLARIFAI_PAT || "",
       // Keep API key fallbacks for compatibility
       CLARIFAI_API_KEY: process.env.CLARIFAI_API_KEY || process.env.CLEARIFAI_API_KEY || "",
+      // Nutrition APIs (optional)
+      CALORIE_NINJAS_KEY: process.env.CALORIE_NINJAS_KEY || "",
+      FDC_API_KEY: process.env.FDC_API_KEY || "",
     },
   },
 });
