@@ -21,15 +21,19 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+          tabBarActiveTintColor: "#8B5CF6",
+          tabBarInactiveTintColor: "#a1a1aa",
+          tabBarLabelStyle: { fontSize: 11, marginBottom: 3 },
+          tabBarIconStyle: { marginTop: 3 },
         // Disable the static render of the header on web
         // to prevent a hydration error in React Navigation v6.
         headerShown: useClientOnlyValue(false, true),
+        
       }}>
       <Tabs.Screen
         name="one"
         options={{
-          title: 'mainpage',
+          title: 'Home',
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
           headerRight: () => (
             <Link href="/modal" asChild>
