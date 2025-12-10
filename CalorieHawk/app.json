@@ -15,7 +15,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier" : "com.caloriehawk.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +24,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package" : "com.caloriehawk.app"
     },
     "web": {
       "bundler": "metro",
@@ -32,7 +34,11 @@
     },
     "plugins": [
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser", 
+      "@react-native-google-signin/google-signin",
+      {
+        "iosUrlScheme" : "com.googleusercontent.apps.872994424947-l4hp1g84blq35emc8krc3i03ae8ich30"
+      }
     ],
     "experiments": {
       "typedRoutes": true
