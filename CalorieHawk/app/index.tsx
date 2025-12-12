@@ -68,7 +68,7 @@ export default function Login() {
   const [request, response, promptAsync] = Google.useAuthRequest({
   clientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
   iosClientId: "872994424947-l4hp1g84blq35emc8krc3i03ae8ich30.apps.googleusercontent.com",
-  androidClientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
+  androidClientId: "872994424947-7mvtrcc7h1np74d6vouk8qjft25cgl5q.apps.googleusercontent.com",
   redirectUri: finalRedirectUri,
 });
 
