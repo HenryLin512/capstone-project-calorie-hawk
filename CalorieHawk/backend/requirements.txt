@@ -1,7 +1,0 @@
-fastapi
-uvicorn[standard]
-httpx
-python-dotenv
-python-multipart
-pydantic
-requests
