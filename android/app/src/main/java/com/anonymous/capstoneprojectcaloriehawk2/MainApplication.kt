@@ -1,4 +1,4 @@
-package com.capstoneprojectcaloriehawk2
+package com.anonymous.capstoneprojectcaloriehawk2
 
 import android.app.Application
 import android.content.res.Configuration

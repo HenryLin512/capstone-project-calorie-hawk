@@ -87,13 +87,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.capstoneprojectcaloriehawk2"
+    namespace 'com.anonymous.capstoneprojectcaloriehawk2'
     defaultConfig {
-        applicationId "com.capstoneprojectcaloriehawk2"
+        applicationId 'com.anonymous.capstoneprojectcaloriehawk2'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

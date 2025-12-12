@@ -31,7 +31,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
 }
 expoAutolinking.useExpoModules()
 
-rootProject.name = 'capstoneprojectcaloriehawk2'
+rootProject.name = 'capstone-project-calorie-hawk-2'
 
 expoAutolinking.useExpoVersionCatalog()
 
