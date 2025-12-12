@@ -1,0 +1,10 @@
+{
+  "android": {
+    "package": "com.anonymous.capstoneprojectcaloriehawk2"
+  },
+  "extra": {
+    "eas": {
+      "projectId": "ffb75db0-4994-46e2-986e-23efd71a5bad"
+    }
+  }
+}
