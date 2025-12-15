@@ -1,57 +1,77 @@
-import { View, Text, Switch, TouchableOpacity, StyleSheet } from "react-native";
-import { useState, useEffect } from "react";
+import React, { useEffect } from "react";
+import {
+  View,
+  Text,
+  Switch,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "@/FireBaseConfig"; // adjust path if needed
+import { auth } from "@/FireBaseConfig";
 import { router } from "expo-router";
+import { useTheme } from "../ThemeContext"; // 👈 usa tu contexto global
 
 export default function SettingScreen() {
-  const [isDarkMode, setDarkmode] = useState(false);
-  const [notification, setNotification] = useState(false);
+  const { theme, mode, setThemeMode } = useTheme(); // 👈 accedemos al tema global
+  const [notification, setNotification] = React.useState(false);
 
-  // watch for auth changes, redirect if user logs out
+  // 🔐 Detecta cambios de autenticación
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        router.replace("/"); // go back to login (index)
-      }
+      if (!user) router.replace("/"); // si se desloguea, vuelve al login
     });
     return () => unsub();
   }, []);
 
+  // 🔓 Cerrar sesión
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // onAuthStateChanged will handle the redirect
     } catch (error: any) {
       console.error("Logout failed:", error.message);
     }
   };
 
+  // 🌙 Cambiar Dark/Light mode globalmente
+  const toggleDarkMode = (value: boolean) => {
+    setThemeMode(value ? "dark" : "light");
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Settings</Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <Text style={[styles.title, { color: theme.text }]}>Settings</Text>
 
-      {/* Account */}
+      {/* --- Account --- */}
       <View style={styles.section}>
         <TouchableOpacity style={styles.item}>
-          <Text style={styles.text}>Edit Profile</Text>
+          <Text style={[styles.text, { color: theme.text }]}>Edit Profile</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.item}>
-          <Text style={styles.text}>Change Password</Text>
+          <Text style={[styles.text, { color: theme.text }]}>Change Password</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Preferences */}
+      {/* --- Preferences --- */}
       <View style={styles.section}>
-        <Text style={styles.text}>Dark Mode</Text>
-        <Switch value={isDarkMode} onValueChange={setDarkmode} />
-      </View>
-      <View style={styles.section}>
-        <Text style={styles.text}>Notification</Text>
-        <Switch value={notification} onValueChange={setNotification} />
+        <View style={styles.row}>
+          <Text style={[styles.text, { color: theme.text }]}>Dark Mode</Text>
+          <Switch
+            value={mode === "dark"}
+            onValueChange={toggleDarkMode}
+            thumbColor={mode === "dark" ? theme.tint : "#ccc"}
+          />
+        </View>
+        <View style={styles.row}>
+          <Text style={[styles.text, { color: theme.text }]}>Notification</Text>
+          <Switch
+            value={notification}
+            onValueChange={setNotification}
+            thumbColor={notification ? theme.tint : "#ccc"}
+          />
+        </View>
       </View>
 
-      {/* Log out */}
+      {/* --- Logout --- */}
       <View style={styles.section}>
         <TouchableOpacity onPress={handleLogout}>
           <Text style={[styles.text, { color: "red" }]}>Log Out</Text>
@@ -61,25 +81,36 @@ export default function SettingScreen() {
   );
 }
 
+// --- Estilos ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: "#fff",
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
     marginBottom: 20,
+    textAlign: "center",
   },
-  section: { marginBottom: 20 },
+  section: {
+    marginBottom: 25,
+  },
   item: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "#ddd",
   },
-  text: { fontSize: 16 },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginVertical: 10,
+  },
+  text: {
+    fontSize: 16,
+  },
 });

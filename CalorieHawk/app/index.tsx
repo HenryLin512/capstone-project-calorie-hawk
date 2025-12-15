@@ -22,7 +22,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import * as AuthSession from "expo-auth-session";
 import Constants from "expo-constants";
-import { useTheme } from "./ThemeContext"; // 👈 usamos tu nuevo context global
+import { useTheme } from "./ThemeContext"; // ✅ Global theme context
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -36,8 +36,6 @@ const finalRedirectUri =
     ? `https://auth.expo.dev/@koo24444/CalorieHawk`
     : redirectUri;
 
-console.log("REDIRECT URI:", finalRedirectUri);
-
 export default function Login() {
   // --- Global Theme Context
   const { theme, mode, toggleTheme } = useTheme();
@@ -49,7 +47,7 @@ export default function Login() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
 
-  // --- Firebase Google Auth
+  // --- Google Auth
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId:
       "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
@@ -124,7 +122,7 @@ export default function Login() {
   // --- UI ---
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Dark/Light Mode Button */}
+      {/* Global Dark/Light Toggle */}
       <Pressable
         onPress={toggleTheme}
         style={{ alignSelf: "center", marginBottom: 20 }}
