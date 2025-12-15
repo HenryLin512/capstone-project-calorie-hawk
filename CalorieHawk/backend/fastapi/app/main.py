@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional, Tuple, List, Union
 import os
 import asyncio
 import httpx
+#import base64
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -46,6 +47,8 @@ FDC_API_KEY = os.getenv("FDC_API_KEY")
 FDC_BASE = "https://api.nal.usda.gov/fdc/v1"
 PREFERRED_TYPES = ["Foundation", "SR Legacy", "Branded"]  # fallback order
 
+
+
 # Optional extra API
 CALORIE_NINJAS_KEY = os.getenv("CALORIE_NINJAS_KEY", "")
 
@@ -56,6 +59,7 @@ class NutritionResponse(BaseModel):
     fat: Optional[float] = None
     carbs: Optional[float] = None
     source: str  # 'calorieninjas', 'fdc', 'fallback', 'none'
+
 
 # Static fallback map (partner-style)
 FALLBACK_MAP: Dict[str, Dict[str, float]] = {
@@ -483,8 +487,3 @@ async def get_nutrition(food_name: str):
 
     # 4) Nothing found
     return NutritionResponse(source="none")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

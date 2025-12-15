@@ -8,7 +8,7 @@
 // - Types for strong TS usage
 
 import { Platform } from "react-native";
-import Constants from "expo-constants";
+//import Constants from "expo-constants";
 
 /* ----------------------------- Types ----------------------------- */
 
@@ -42,7 +42,7 @@ export type GetMacrosOptions = {
 
 /* ----------------------- Base URL Selection ---------------------- */
 
-function pickBase(): string {
+/*function pickBase(): string {
   // Prefer EXPO_PUBLIC_* at build/runtime (Expo EAS / env)
   const envBase =
     (process?.env?.EXPO_PUBLIC_MACRO_API as string) ||
@@ -50,7 +50,12 @@ function pickBase(): string {
   if (envBase) return envBase.replace(/\/+$/, "");
 
   // Fallback to app.json/app.config.ts -> extra.MACRO_API_BASE if set
-  const extra = (Constants.expoConfig?.extra as any) ?? {};
+  //const extra = (Constants.expoConfig?.extra as any) ?? {};
+  const extra =
+  Constants.expoConfig?.extra ??
+  (Constants.manifest as any)?.extra ??
+  {};
+
   if (extra.MACRO_API_BASE)
     return String(extra.MACRO_API_BASE).replace(/\/+$/, "");
 
@@ -63,9 +68,10 @@ function pickBase(): string {
 
   // Physical devices on same Wi-Fi need your machine’s LAN IP
   return "http://local:8000"; // ← change to your machine’s LAN IP if testing on device
-}
+}*/
 
-let BASE_URL = pickBase();
+//let BASE_URL = pickBase();
+let BASE_URL = "https://capstone-project-calorie-hawk.onrender.com";
 export function setMacroApiBase(url: string) {
   BASE_URL = url.replace(/\/+$/, "");
 }

@@ -4,12 +4,27 @@ module.exports = () => ({
     name: "CalorieHawk",
     slug: "caloriehawk",
     version: "1.0.0",
+    owner: "vinhtu27",
+
+    scheme: "caloriehawk",
+
+    android: {
+      package: "com.vinhtu27.caloriehawk",
+    },
+
+    runtimeVersion: "1.0.0",
+
+    updates: {
+      url: "https://u.expo.dev/b4a59533-2248-4d83-8604-77ef484d1287",
+      fallbackToCacheTimeout: 0,
+    },
+
     extra: {
-      // Prefer PAT for accessing Clarifai public models (clarifai/main)
+      eas: {
+        projectId: "b4a59533-2248-4d83-8604-77ef484d1287",
+      },
       CLARIFAI_PAT: process.env.CLARIFAI_PAT || "",
-      // Keep API key fallbacks for compatibility
-      CLARIFAI_API_KEY: process.env.CLARIFAI_API_KEY || process.env.CLEARIFAI_API_KEY || "",
-      "MACRO_API_BASE": "http://10.0.0.13:8000",
+      CLARIFAI_API_KEY: process.env.CLARIFAI_API_KEY || "",
     },
   },
 });
