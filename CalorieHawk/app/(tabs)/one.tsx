@@ -98,25 +98,50 @@ const COLORS = {
 
 const BUILT_INS: MealLabel[] = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Other'];
 
-const initialMeals: Meal[] = [
-  { label: 'Breakfast', target: 635, entries: [] },
-  { label: 'Lunch',     target: 847, entries: [] },
-  { label: 'Dinner',    target: 529, entries: [] },
-  { label: 'Snacks',    target: 106, entries: [] },
-  { label: 'Other',     target: 300, entries: [] },
-];
+// Fallback targets when no goal is set (roughly near your old values)
+const FALLBACK_TARGETS: Record<MealLabel, number> = {
+  Breakfast: 635,
+  Lunch: 847,
+  Dinner: 529,
+  Snacks: 106,
+  Other: 300,
+};
+
+// Fractions of the daily goal for each meal (must sum to <= 1)
+const MEAL_SPLITS: Record<MealLabel, number> = {
+  Breakfast: 0.35,
+  Lunch: 0.3,
+  Dinner: 0.25,
+  Snacks: 0.1,
+  Other: 0, // "Other" gets left-over / manual use
+};
 
 const KCAL_STEP = 50;
 const DONUT_SIZE = 168;
 const DONUT_STROKE = 12;
 const DONUT_INNER = DONUT_SIZE - DONUT_STROKE * 2;
 
+function makeMealsWithTargets(goal: number): Meal[] {
+  if (goal > 0) {
+    return BUILT_INS.map((label) => {
+      const split = MEAL_SPLITS[label] ?? 0;
+      const target = Math.round(goal * split);
+      return { label, target, entries: [] };
+    });
+  }
+  // No goal yet: use fallback per-meal targets
+  return BUILT_INS.map((label) => ({
+    label,
+    target: FALLBACK_TARGETS[label],
+    entries: [],
+  }));
+}
+
 export default function Dashboard() {
   const insets = useSafeAreaInsets();
 
-  const [meals, setMeals] = useState<Meal[]>(initialMeals);
+  const [meals, setMeals] = useState<Meal[]>(() => makeMealsWithTargets(0));
   const [dailyGoal, setDailyGoal] = useState<number>(0);
-  const [burned] = useState<number>(0);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [activeMeal, setActiveMeal] = useState<MealLabel>('Breakfast');
@@ -160,12 +185,27 @@ export default function Dashboard() {
     const goalRef = doc(db, 'users', user.uid, 'calorieGoals', todayKey);
     const unsub = onSnapshot(goalRef, (snap) => {
       const data = snap.data();
-      setDailyGoal(typeof data?.goal === 'number' && data.goal > 0 ? data.goal : 0);
+      const goal =
+        typeof data?.goal === 'number' && data.goal > 0 ? data.goal : 0;
+
+      setDailyGoal(goal);
+
+      // Update per-meal targets when goal changes, keep existing entries
+      setMeals((prev) => {
+        const base = makeMealsWithTargets(goal);
+        const targetByLabel = new Map<MealLabel, number>(
+          base.map((m) => [m.label, m.target])
+        );
+        return prev.map((m) => ({
+          ...m,
+          target: targetByLabel.get(m.label as MealLabel) ?? m.target,
+        }));
+      });
     });
     return () => unsub();
   }, [todayKey]);
 
-  // Entries listener
+  // Entries listener (also uses current dailyGoal for targets)
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
@@ -175,7 +215,8 @@ export default function Dashboard() {
       const data = snap.data() as any | undefined;
       const entries: Entry[] = Array.isArray(data?.entries) ? data.entries : [];
 
-      const nextMeals: Meal[] = initialMeals.map((m) => ({ ...m, entries: [] }));
+      const baseMeals = makeMealsWithTargets(dailyGoal);
+      const nextMeals: Meal[] = baseMeals.map((m) => ({ ...m, entries: [] }));
       const byMeal = new Map(nextMeals.map((m) => [m.label, m]));
 
       for (const raw of entries) {
@@ -210,7 +251,7 @@ export default function Dashboard() {
       setMeals(nextMeals);
     });
     return () => unsub();
-  }, [todayKey]);
+  }, [todayKey, dailyGoal]);
 
   // Notifications: register once on mount
   useEffect(() => {
@@ -589,14 +630,7 @@ export default function Dashboard() {
 
       {/* Summary */}
       <View style={styles.card}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryNumber}>
-              {eatenCalories.toLocaleString()}
-            </Text>
-            <Text style={styles.summaryLabel}>Eaten</Text>
-          </View>
-
+        <View style={{ alignItems: 'center' }}>
           <Donut
             size={DONUT_SIZE}
             strokeWidth={DONUT_STROKE}
@@ -633,9 +667,21 @@ export default function Dashboard() {
             </Pressable>
           </Donut>
 
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryNumber}>{burned.toLocaleString()}</Text>
-            <Text style={styles.summaryLabel}>Burned</Text>
+          {/* Eaten + Goal chips under the donut */}
+          <View style={styles.summaryChipsRow}>
+            <View style={styles.summaryChip}>
+              <Text style={styles.summaryChipLabel}>Eaten</Text>
+              <Text style={styles.summaryChipValue}>
+                {eatenCalories.toLocaleString()} kcal
+              </Text>
+            </View>
+
+            <View style={styles.summaryChip}>
+              <Text style={styles.summaryChipLabel}>Goal</Text>
+              <Text style={styles.summaryChipValue}>
+                {dailyGoal > 0 ? dailyGoal.toLocaleString() : '—'} kcal
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -714,11 +760,8 @@ export default function Dashboard() {
                       />
                     </View>
 
-                    <QuickActionsRow
-                      onScan={onScan}
-                      onSearch={() => Alert.alert('Search', 'Open search here.')}
-                      onRecent={() => Alert.alert('Recent', 'Open recent items here.')}
-                    />
+                    {/* Only Scan button now (QuickActionsRow must treat onSearch/onRecent as optional) */}
+                    <QuickActionsRow onScan={onScan} />
                   </View>
                 </View>
               </View>
@@ -1100,14 +1143,31 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
   },
-  summaryRow: {
+
+  summaryChipsRow: {
+    marginTop: 12,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    width: '100%',
   },
-  summaryItem: { alignItems: 'center', width: 78 },
-  summaryNumber: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  summaryLabel: { fontSize: 12, color: COLORS.subtext },
+  summaryChip: {
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: COLORS.mutedBg,
+    alignItems: 'center',
+  },
+  summaryChipLabel: {
+    fontSize: 12,
+    color: COLORS.subtext,
+  },
+  summaryChipValue: {
+    marginTop: 2,
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
 
   remaining: { fontSize: 22, fontWeight: '800', color: COLORS.text },
   remainingLabel: { fontSize: 12, color: COLORS.subtext },
@@ -1308,6 +1368,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-
 
 
