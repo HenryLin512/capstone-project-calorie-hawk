@@ -9,6 +9,7 @@
  * - Per-meal macro display with compact bars + (est.) preview
  * - Inline grams prompt before estimating macros
  * - Auto-fill kcal from estimated macros (but allow manual override)
+ * - Daily macro pebbles reflect summed macros from all meals
  */
 
 import React, { useRef, useMemo, useState, useEffect } from 'react';
@@ -51,7 +52,13 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
 import { scanFood } from '../../utils/foodRecognition';
 import { getMacros, type MacroServiceResponse } from '../../utils/macros';
-import { ZERO_MACROS, type MacroTotals } from '../../utils/macroMath';
+import {
+  ESTIMATE_PORTION_GRAMS,
+  normalizeFoodQuery,
+  pickMacroSnapshot,
+  type MacroSnap as HelperMacroSnap,
+} from '../../utils/macroHelpers';
+import { sumEntriesMacros, perMealGoals, round1 } from '../../utils/mealMacros';
 
 // UI helpers
 import MacroPebble from '@/components/MacroPebble';
@@ -64,12 +71,8 @@ import { registerForPushNotificationsAsync } from '../../utils/pushNotifications
 
 type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Other';
 
-type MacroSnap = {
-  kcal?: number | null;
-  protein_g?: number | null;
-  fat_g?: number | null;
-  carbs_g?: number | null;
-};
+// Reuse the shared MacroSnap type from macroHelpers
+type MacroSnap = HelperMacroSnap;
 
 type Entry = {
   id: string;
@@ -99,11 +102,11 @@ const COLORS = {
 const BUILT_INS: MealLabel[] = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Other'];
 
 const initialMeals: Meal[] = [
-  { label: 'Breakfast', target: 635, entries: [] },
-  { label: 'Lunch',     target: 847, entries: [] },
-  { label: 'Dinner',    target: 529, entries: [] },
-  { label: 'Snacks',    target: 106, entries: [] },
-  { label: 'Other',     target: 300, entries: [] },
+  { label: 'Breakfast', target: 0, entries: [] },
+  { label: 'Lunch',     target: 0, entries: [] },
+  { label: 'Dinner',    target: 0, entries: [] },
+  { label: 'Snacks',    target: 0, entries: [] },
+  { label: 'Other',     target: 0, entries: [] },
 ];
 
 const KCAL_STEP = 50;
@@ -116,7 +119,6 @@ export default function Dashboard() {
 
   const [meals, setMeals] = useState<Meal[]>(initialMeals);
   const [dailyGoal, setDailyGoal] = useState<number>(0);
-  const [burned] = useState<number>(0);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [activeMeal, setActiveMeal] = useState<MealLabel>('Breakfast');
@@ -141,17 +143,31 @@ export default function Dashboard() {
 
   // inline grams prompt for macro estimation
   const [showGramsRow, setShowGramsRow] = useState(false);
-  const [gramsInput, setGramsInput] = useState<string>('200');
+  const [gramsInput, setGramsInput] = useState<string>(
+    ESTIMATE_PORTION_GRAMS.toString()
+  );
 
   const webFileRef = useRef<HTMLInputElement | null>(null);
   const todayKey = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
 
+  // calories eaten from all meals
   const eatenCalories = useMemo(
     () => meals.reduce((sum, m) => sum + m.entries.reduce((a, e) => a + e.kcal, 0), 0),
     [meals]
   );
   const remaining = Math.max(0, dailyGoal > 0 ? dailyGoal - eatenCalories : 0);
   const remainingPct = dailyGoal > 0 ? remaining / dailyGoal : 0;
+
+  // DAILY MACROS (for the top Carbs/Protein/Fat row)
+  const dailyMacros = useMemo(
+    () => sumEntriesMacros(meals.flatMap((m) => m.entries)),
+    [meals]
+  );
+
+  // distribute the dailyGoal into macro gram goals (50/25/25)
+  const carbsGoal   = dailyGoal > 0 ? (dailyGoal * 0.50) / 4 : 0;
+  const proteinGoal = dailyGoal > 0 ? (dailyGoal * 0.25) / 4 : 0;
+  const fatGoal     = dailyGoal > 0 ? (dailyGoal * 0.25) / 9 : 0;
 
   // Goal listener
   useEffect(() => {
@@ -160,7 +176,21 @@ export default function Dashboard() {
     const goalRef = doc(db, 'users', user.uid, 'calorieGoals', todayKey);
     const unsub = onSnapshot(goalRef, (snap) => {
       const data = snap.data();
-      setDailyGoal(typeof data?.goal === 'number' && data.goal > 0 ? data.goal : 0);
+      const g = typeof data?.goal === 'number' && data.goal > 0 ? data.goal : 0;
+      setDailyGoal(g);
+
+      // Re-split per-meal targets evenly whenever the goal changes
+      if (g > 0) {
+        const perMeal = Math.round(g / initialMeals.length);
+        setMeals((prev) =>
+          prev.map((m) => ({
+            ...m,
+            target: perMeal,
+          }))
+        );
+      } else {
+        setMeals((prev) => prev.map((m) => ({ ...m, target: 0 })));
+      }
     });
     return () => unsub();
   }, [todayKey]);
@@ -175,7 +205,11 @@ export default function Dashboard() {
       const data = snap.data() as any | undefined;
       const entries: Entry[] = Array.isArray(data?.entries) ? data.entries : [];
 
-      const nextMeals: Meal[] = initialMeals.map((m) => ({ ...m, entries: [] }));
+      const nextMeals: Meal[] = initialMeals.map((m) => ({
+        ...m,
+        target: dailyGoal > 0 ? Math.round(dailyGoal / initialMeals.length) : 0,
+        entries: [],
+      }));
       const byMeal = new Map(nextMeals.map((m) => [m.label, m]));
 
       for (const raw of entries) {
@@ -210,7 +244,7 @@ export default function Dashboard() {
       setMeals(nextMeals);
     });
     return () => unsub();
-  }, [todayKey]);
+  }, [todayKey, dailyGoal]);
 
   // Notifications: register once on mount
   useEffect(() => {
@@ -274,7 +308,7 @@ export default function Dashboard() {
     setPct(0);
     setMacroBusy(false);
     setShowGramsRow(false);
-    setGramsInput('200');
+    setGramsInput(ESTIMATE_PORTION_GRAMS.toString());
     setModalVisible(true);
   };
 
@@ -381,21 +415,27 @@ export default function Dashboard() {
   };
 
   const openGramsPrompt = () => {
-    const q = (suggestedFoodName || '').toLowerCase().trim();
-    if (!q) {
+    const raw = (suggestedFoodName || '').trim();
+    if (!raw) {
       Alert.alert('No food name', 'Add a photo or type a name first.');
       return;
     }
-    setGramsInput((prev) => (prev && Number(prev) > 0 ? prev : '200'));
+    setGramsInput((prev) =>
+      prev && Number(prev) > 0 ? prev : ESTIMATE_PORTION_GRAMS.toString()
+    );
     setShowGramsRow(true);
   };
 
   const estimateMacrosForGrams = async (grams: number) => {
-    const q = (suggestedFoodName || '').toLowerCase().trim();
-    if (!q) {
+    const raw = (suggestedFoodName || '').trim();
+    if (!raw) {
       Alert.alert('No food name', 'Add a photo or type a name first.');
       return;
     }
+
+    // Use helper to force things like "mango" → "mango, raw"
+    const q = normalizeFoodQuery(raw);
+
     try {
       setMacroBusy(true);
       const res: MacroServiceResponse = await getMacros(q, {
@@ -403,8 +443,8 @@ export default function Dashboard() {
         includeSurvey: false,
       });
 
-      const snap: MacroSnap | null =
-        res?.scaled_per_grams ?? res?.per_100g ?? null;
+      // Safely pick a macro snapshot from server shape
+      const snap = pickMacroSnapshot(res) as MacroSnap | null;
 
       if (!snap) {
         setMacroSnapshot(null);
@@ -412,7 +452,6 @@ export default function Dashboard() {
         return;
       }
 
-      // store macro snapshot
       setMacroSnapshot(snap);
 
       // auto-fill kcal from estimated macros if user hasn't overridden yet
@@ -484,7 +523,7 @@ export default function Dashboard() {
       meal: activeMeal,
       ...(photoUri ? { photoUri } : {}),
       ...(suggestedFoodName ? { foodName: suggestedFoodName } : {}),
-      ...(macroSnapshot ? { macros: { ...macrosForDb } } : {}),
+      ...(macrosForDb ? { macros: { ...macrosForDb } } : {}),
     };
 
     const entryForDb: any = {
@@ -553,10 +592,6 @@ export default function Dashboard() {
 
   const todayStr = dayjs().format('MMMM D, YYYY');
 
-  const carbsGoal   = dailyGoal > 0 ? (dailyGoal * 0.50) / 4 : 0;
-  const proteinGoal = dailyGoal > 0 ? (dailyGoal * 0.25) / 4 : 0;
-  const fatGoal     = dailyGoal > 0 ? (dailyGoal * 0.25) / 9 : 0;
-
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
@@ -587,16 +622,9 @@ export default function Dashboard() {
         </Pressable>
       </View>
 
-      {/* Summary */}
+      {/* Summary card with donut + Eaten/Goal */}
       <View style={styles.card}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryNumber}>
-              {eatenCalories.toLocaleString()}
-            </Text>
-            <Text style={styles.summaryLabel}>Eaten</Text>
-          </View>
-
+        <View style={styles.donutWrapper}>
           <Donut
             size={DONUT_SIZE}
             strokeWidth={DONUT_STROKE}
@@ -632,20 +660,45 @@ export default function Dashboard() {
               )}
             </Pressable>
           </Donut>
+        </View>
 
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryNumber}>{burned.toLocaleString()}</Text>
-            <Text style={styles.summaryLabel}>Burned</Text>
+        <View style={styles.goalRow}>
+          <View style={styles.goalItem}>
+            <Text style={styles.goalLabel}>Eaten</Text>
+            <Text style={styles.goalNumber}>
+              {eatenCalories.toLocaleString()} kcal
+            </Text>
+          </View>
+          <View style={styles.goalItem}>
+            <Text style={styles.goalLabel}>Goal</Text>
+            <Text style={styles.goalNumber}>
+              {dailyGoal.toLocaleString()} kcal
+            </Text>
           </View>
         </View>
       </View>
 
-      {/* Daily macro pebbles */}
+      {/* Daily macro pebbles (now use REAL totals) */}
       <View style={{ paddingHorizontal: 16, marginTop: -4, marginBottom: 8 }}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <MacroPebble label="Carbs"   value={0} goal={carbsGoal}   fill="#60A5FA" />
-          <MacroPebble label="Protein" value={0} goal={proteinGoal} fill="#22C55E" />
-          <MacroPebble label="Fat"     value={0} goal={fatGoal}     fill="#F59E0B" />
+          <MacroPebble
+            label="Carbs"
+            value={dailyMacros.carbs_g}
+            goal={carbsGoal}
+            fill="#60A5FA"
+          />
+          <MacroPebble
+            label="Protein"
+            value={dailyMacros.protein_g}
+            goal={proteinGoal}
+            fill="#22C55E"
+          />
+          <MacroPebble
+            label="Fat"
+            value={dailyMacros.fat_g}
+            goal={fatGoal}
+            fill="#F59E0B"
+          />
         </View>
       </View>
 
@@ -666,7 +719,7 @@ export default function Dashboard() {
           );
 
           // live totals from saved entries
-          const liveTotals = sumEntriesMacros(item.entries);
+          const liveTotals = sumEntriesMacros(item.entries as any);
           // add pending preview (if any)
           const pending = pendingByMeal[item.label];
           const display = {
@@ -674,7 +727,7 @@ export default function Dashboard() {
             protein_g: (liveTotals.protein_g ?? 0) + (pending?.protein_g ?? 0),
             fat_g:     (liveTotals.fat_g     ?? 0) + (pending?.fat_g     ?? 0),
           };
-          const goals = perMealGoals(item.target);
+          const goals = perMealGoals(item.target || 0);
 
           const onScan = () => {
             openAdd(item.label);
@@ -714,11 +767,8 @@ export default function Dashboard() {
                       />
                     </View>
 
-                    <QuickActionsRow
-                      onScan={onScan}
-                      onSearch={() => Alert.alert('Search', 'Open search here.')}
-                      onRecent={() => Alert.alert('Recent', 'Open recent items here.')}
-                    />
+                    {/* Scan only (Search/Recent removed from UI) */}
+                    <QuickActionsRow onScan={onScan} />
                   </View>
                 </View>
               </View>
@@ -909,7 +959,7 @@ export default function Dashboard() {
                 ) : null}
               </View>
 
-              {/* Inline grams row (instead of separate Modal) */}
+              {/* Inline grams row */}
               {showGramsRow && (
                 <View style={styles.gramsInlineCard}>
                   <Text style={styles.gramsInlineTitle}>How many grams?</Text>
@@ -920,7 +970,7 @@ export default function Dashboard() {
                       onChangeText={setGramsFromText}
                       keyboardType="numeric"
                       inputMode="numeric"
-                      placeholder="200"
+                      placeholder={ESTIMATE_PORTION_GRAMS.toString()}
                       maxLength={5}
                     />
                     <Text style={styles.gramsInlineSuffix}>g</Text>
@@ -978,35 +1028,6 @@ export default function Dashboard() {
       </Modal>
     </SafeAreaView>
   );
-}
-
-/* ---------- helpers ---------- */
-
-// sum macros across entries (saved ones only)
-function sumEntriesMacros(entries: Entry[]): MacroTotals {
-  return entries.reduce<MacroTotals>(
-    (acc, e) => {
-      const m = e.macros || {};
-      acc.kcal      += (m.kcal      ?? 0) || 0;
-      acc.protein_g += (m.protein_g ?? 0) || 0;
-      acc.fat_g     += (m.fat_g     ?? 0) || 0;
-      acc.carbs_g   += (m.carbs_g   ?? 0) || 0;
-      return acc;
-    },
-    { ...ZERO_MACROS }
-  );
-}
-
-function perMealGoals(kcalTarget: number) {
-  const carbs_g   = (kcalTarget * 0.50) / 4;
-  const protein_g = (kcalTarget * 0.25) / 4;
-  const fat_g     = (kcalTarget * 0.25) / 9;
-  return { carbs_g, protein_g, fat_g };
-}
-
-function round1(n?: number | null) {
-  if (n == null || Number.isNaN(n)) return 0;
-  return Math.round(n * 10) / 10;
 }
 
 /* ---------- tiny UI for the three mini macro bars ---------- */
@@ -1093,21 +1114,34 @@ const styles = StyleSheet.create({
     margin: 16,
     backgroundColor: COLORS.paper,
     borderRadius: 18,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
   },
-  summaryRow: {
-    flexDirection: 'row',
+  donutWrapper: {
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  summaryItem: { alignItems: 'center', width: 78 },
-  summaryNumber: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  summaryLabel: { fontSize: 12, color: COLORS.subtext },
+  goalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  goalItem: {
+    flex: 1,
+    backgroundColor: COLORS.mutedBg,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  goalLabel: { fontSize: 13, color: COLORS.subtext },
+  goalNumber: { fontSize: 16, fontWeight: '700', color: COLORS.text },
 
   remaining: { fontSize: 22, fontWeight: '800', color: COLORS.text },
   remainingLabel: { fontSize: 12, color: COLORS.subtext },

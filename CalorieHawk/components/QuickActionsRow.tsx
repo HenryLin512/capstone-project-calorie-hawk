@@ -1,112 +1,74 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
+// components/QuickActionsRow.tsx
 
-export type QuickActionsRowProps = {
-  onScan: () => void;
-  onSearch: () => void;
-  onRecent: () => void;
-  /** Disable all actions (e.g., while uploading) */
-  disabled?: boolean;
-  /** Smaller paddings */
-  compact?: boolean;
-  /** Optional: container style overrides */
-  style?: ViewStyle;
+import React from 'react';
+import { View, Pressable, Text, StyleSheet } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+
+type QuickActionsRowProps = {
+  onScan?: () => void;
+  onSearch?: () => void;
+  onRecent?: () => void;
 };
 
-const QuickActionsRow: React.FC<QuickActionsRowProps> = ({
+export default function QuickActionsRow({
   onScan,
   onSearch,
   onRecent,
-  disabled,
-  compact,
-  style,
-}) => {
+}: QuickActionsRowProps) {
+  const hasScan = typeof onScan === 'function';
+  const hasSearch = typeof onSearch === 'function';
+  const hasRecent = typeof onRecent === 'function';
+
+  // If somehow nothing is passed, render nothing to avoid a weird empty bar
+  if (!hasScan && !hasSearch && !hasRecent) {
+    return null;
+  }
+
   return (
-    <View style={[styles.wrap, style]}>
-      <ActionChip
-        label="📷 Scan"
-        onPress={onScan}
-        disabled={disabled}
-        compact={compact}
-        testID="qa-scan"
-      />
-      <ActionChip
-        label="🔍 Search"
-        onPress={onSearch}
-        disabled={disabled}
-        compact={compact}
-        testID="qa-search"
-      />
-      <ActionChip
-        label="⏱ Recent"
-        onPress={onRecent}
-        disabled={disabled}
-        compact={compact}
-        testID="qa-recent"
-      />
+    <View style={styles.row}>
+      {hasScan && (
+        <Pressable style={styles.actionBtn} onPress={onScan}>
+          <Ionicons name="scan-outline" size={18} color="#111827" />
+          <Text style={styles.actionText}>Scan</Text>
+        </Pressable>
+      )}
+
+      {hasSearch && (
+        <Pressable style={styles.actionBtn} onPress={onSearch}>
+          <Ionicons name="search-outline" size={18} color="#111827" />
+          <Text style={styles.actionText}>Search</Text>
+        </Pressable>
+      )}
+
+      {hasRecent && (
+        <Pressable style={styles.actionBtn} onPress={onRecent}>
+          <Ionicons name="time-outline" size={18} color="#111827" />
+          <Text style={styles.actionText}>Recent</Text>
+        </Pressable>
+      )}
     </View>
-  );
-};
-
-export default QuickActionsRow;
-
-function ActionChip({
-  label,
-  onPress,
-  disabled,
-  compact,
-  testID,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  compact?: boolean;
-  testID?: string;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.chip,
-        compact && styles.chipCompact,
-        disabled && styles.chipDisabled,
-        pressed && !disabled && styles.chipPressed,
-      ]}
-      testID={testID}
-    >
-      <Text style={styles.chipText}>{label}</Text>
-    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  row: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginTop: 8,
-    flexWrap: 'wrap',
   },
-  chip: {
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-  },
-  chipCompact: {
-    paddingHorizontal: 8,
     paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F3F4F6',
   },
-  chipPressed: {
-    opacity: 0.8,
-  },
-  chipDisabled: {
-    opacity: 0.5,
-  },
-  chipText: {
+  actionText: {
+    marginLeft: 6,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#0F172A',
+    color: '#111827',
   },
 });
+
