@@ -284,12 +284,16 @@ export default function Dashboard() {
 
   async function scheduleFollowUpReminder(remainingKcal: number) {
     if (remainingKcal <= 0) return;
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Keep going!',
         body: `You still have about ${Math.round(remainingKcal)} kcal left today.`,
       },
-      trigger: { seconds: 90 * 60 }, // ~90 minutes later
+      trigger: {
+        seconds: 90 * 60, // ~90 minutes later
+        repeats: false,
+      } as Notifications.TimeIntervalTriggerInput,
     });
   }
 
