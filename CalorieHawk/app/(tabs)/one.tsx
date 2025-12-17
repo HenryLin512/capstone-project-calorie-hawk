@@ -61,6 +61,8 @@ import Donut from '../../components/Donut';
 // Notification
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '../../utils/pushNotifications';
+import { demoWelcomeNotification } from '../../utils/pushNotifications';
+
 
 type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Other';
 
@@ -178,6 +180,27 @@ export default function Dashboard() {
   const remaining = Math.max(0, dailyGoal > 0 ? dailyGoal - eatenCalories : 0);
   const remainingPct = dailyGoal > 0 ? remaining / dailyGoal : 0;
 
+  //make sure the welcome notification only appear one when using app 
+  const demoShown = useRef(false);
+
+   //Welcome notification when start up.
+  useEffect(() => {
+    (async () => {
+      if (demoShown.current) return;
+      demoShown.current = true;
+
+      const { status } = await Notifications.requestPermissionsAsync();
+      console.log('Notification permission:', status);
+
+      if (status !== 'granted') return;
+
+      // ⏳ Delay is CRITICAL in production
+      setTimeout(() => {
+        demoWelcomeNotification();
+      }, 5000);
+    })();
+  }, []);
+  
   // Goal listener
   useEffect(() => {
     const user = auth.currentUser;
@@ -253,12 +276,13 @@ export default function Dashboard() {
     return () => unsub();
   }, [todayKey, dailyGoal]);
 
-  // Notifications: register once on mount
-  useEffect(() => {
-    registerForPushNotificationsAsync().catch((e) =>
-      console.log('Notifications registration failed:', e)
-    );
-  }, []);
+  // // Notifications: register once on mount
+  // useEffect(() => {
+  //   registerForPushNotificationsAsync().catch((e) =>
+  //     console.log('Notifications registration failed:', e)
+  //   );
+  // }, []);
+
 
   async function notifyEntrySaved(
     meal: MealLabel,
@@ -288,6 +312,7 @@ export default function Dashboard() {
       trigger: null,
     });
   }
+
 
   async function scheduleFollowUpReminder(remainingKcal: number) {
     if (remainingKcal <= 0) return;

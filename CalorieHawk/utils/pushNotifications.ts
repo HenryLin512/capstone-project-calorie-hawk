@@ -169,129 +169,19 @@ export async function getScheduledNotifications() {
   return await Notifications.getAllScheduledNotificationsAsync();
 }
 
-// import * as Notifications from "expo-notifications";
-// import { Platform } from "react-native";
 
-// // -------------------------------------------
-// // REQUIRED: Notification behavior (iOS + Android)
-// // -------------------------------------------
-// Notifications.setNotificationHandler({
-//   handleNotification: async () => ({
-//     shouldShowAlert: true,
-//     shouldPlaySound: true,
-//     shouldSetBadge: false,
+export async function demoWelcomeNotification() {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: '👋 Welcome!',
+      body: "Let's start your day with Calorie Hawk!",
+      sound: 'default',
+    },
+    trigger: {
+      type: 'timeInterval',
+      seconds: 5,
+      repeats: false,
+    } as Notifications.TimeIntervalTriggerInput,
+  });
+}
 
-//     // iOS 17+ extra required fields:
-//     shouldShowBanner: true,
-//     shouldShowList: true,
-//   }),
-// });
-
-// // -------------------------------
-// // 1. SETUP (permissions + channel)
-// // -------------------------------
-// export async function setupNotifications() {
-//   // Ask for permission
-//   const { status } = await Notifications.requestPermissionsAsync();
-
-//   if (status !== "granted") {
-//     console.warn("Notification permissions not granted");
-//     return;
-//   }
-
-//   // Android notification channel
-//   if (Platform.OS === "android") {
-//     await Notifications.setNotificationChannelAsync("default", {
-//       name: "Default Notifications",
-//       importance: Notifications.AndroidImportance.HIGH,
-//     });
-//   }
-
-//   console.log("Notifications setup done.");
-// }
-
-// // --------------------------------------------------------
-// // 2. DAILY REMINDER (e.g., every day at 8 PM)
-// // --------------------------------------------------------
-// export async function scheduleDailyReminder(hour: number, minute: number) {
-//   return await Notifications.scheduleNotificationAsync({
-//     content: {
-//       title: "Daily Reminder",
-//       body: "This is your daily notification!",
-//       sound: true,
-//     },
-//     trigger: {
-//       hour,
-//       minute,
-//       repeats: true,
-//     } as Notifications.CalendarTriggerInput,
-//   });
-// }
-
-// // --------------------------------------------------------
-// // 3. ONE-TIME NOTIFICATION (fires once after N seconds)
-// // --------------------------------------------------------
-// export async function scheduleOneTimeNotification(seconds: number) {
-//   return await Notifications.scheduleNotificationAsync({
-//     content: {
-//       title: "One-Time Alert",
-//       body: "This notification fired once!",
-//     },
-//     trigger: {
-//       seconds,
-//     },
-//   });
-// }
-
-// // --------------------------------------------------------
-// // 4. CANCEL ALL NOTIFICATIONS
-// // --------------------------------------------------------
-// export async function cancelAllNotifications() {
-//   await Notifications.cancelAllScheduledNotificationsAsync();
-//   console.log("All notifications cancelled");
-// }
-// import * as Notifications from "expo-notifications";
-// import * as Device from "expo-device";
-// import { Platform } from "react-native";
-
-// //Set the notification behave when received
-// Notifications.setNotificationHandler({
-//   handleNotification: async () => ({
-//     shouldShowAlert: true,
-//     shouldPlaySound: true,
-//     shouldSetBadge: false,
-//     shouldShowBanner: true, // ✅ iOS 17+ required
-//     shouldShowList: true,   // ✅ iOS 17+ required
-//   }),
-// });
-
-// export async function registerForPushNotificationsAsync() {
-//   let token;
-
-//   if (Device.isDevice) {
-//     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-//     let finalStatus = existingStatus;
-//     if (existingStatus !== 'granted') {
-//       const { status } = await Notifications.requestPermissionsAsync();
-//       finalStatus = status;
-//     }
-//     if (finalStatus !== 'granted') {
-//       alert('Failed to get push token for push notification!');
-//       return;
-//     }
-
-//     token = (await Notifications.getExpoPushTokenAsync()).data;
-//     console.log('Expo Push Token:', token);
-//   } else {
-//     alert('Must use physical device for Push Notifications');
-//   }
-
-//   if (Platform.OS === 'android') {
-//     await Notifications.setNotificationChannelAsync('default', {
-//       name: 'default',
-//       importance: Notifications.AndroidImportance.MAX,
-//     });
-//   }
-
-//   return token;
-// }
