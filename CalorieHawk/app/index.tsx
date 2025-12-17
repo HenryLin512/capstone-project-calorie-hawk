@@ -1,141 +1,113 @@
-import React, { useState } from "react";
-import {View,Text,TextInput,Pressable,StyleSheet,Alert,Modal,} from "react-native";
-import {createUserWithEmailAndPassword,signInWithEmailAndPassword,} from "firebase/auth";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Alert,
+  Modal,
+  Image,
+} from "react-native";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from "firebase/auth";
 import { auth } from "../FireBaseConfig";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
-import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
-
-WebBrowser.maybeCompleteAuthSession();
+import { useTheme } from "./ThemeContext"; // ✅ Global theme context
 
 
-
-
-import Colors from "../constants/Colors";
-import { useColorScheme } from "react-native";
-import { createUserProfile } from "../utils/createUserProfile";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../FireBaseConfig";
 
 export default function Login() {
-  
-  const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? "light"];
+  // --- Global Theme Context
+  const { theme, mode, toggleTheme } = useTheme();
 
- 
+  // --- States
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signUpVisible, setSignUpVisible] = useState(false);
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
 
+
   // --- Login
-  // const handleLogin = async () => {
-  //   try {
-  //     const user = await signInWithEmailAndPassword(auth, email, password);
-  //     if (user) {
-  //       router.replace("/(tabs)/one");
-  //     }
-  //   } catch (error: any) {
-  //     Alert.alert("Login failed", error.message);
-  //   }
-  // };
   const handleLogin = async () => {
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    // Check if profile exists
-    const ref = doc(db, "users", user.uid);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) {
-      // Create missing profile for old accounts
-      await createUserProfile(user);
-    }
-
-    router.replace("/(tabs)/one");
+    try {
+      const user = await signInWithEmailAndPassword(auth, email, password);
+      if (user) router.replace("/(tabs)/one");
     } catch (error: any) {
       Alert.alert("Login failed", error.message);
     }
   };
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-  clientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
-  iosClientId: "872994424947-l4hp1g84blq35emc8krc3i03ae8ich30.apps.googleusercontent.com",
-  androidClientId: "872994424947-ro4btdk72viqgoh5h4nqr3bluh1ctlvr.apps.googleusercontent.com",
-});
-
-React.useEffect(() => {
-  if (response?.type === "success") {
-    const { id_token } = response.params;
-    const credential = GoogleAuthProvider.credential(id_token);
-    signInWithCredential(auth, credential)
-      .then(() => router.replace("/(tabs)/one"))
-      .catch((error) =>
-        Alert.alert("Google Sign-In failed", error.message)
-      );
-  }
-}, [response]);
-
+  // --- Forgot Password
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert("Enter your email", "Please type your email to reset it.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      Alert.alert("Password reset", "Check your email inbox 📩");
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    }
+  };
 
   // --- Sign Up
-  // const handleSignUp = async (signupEmail: string, signupPassword: string) => {
-  //   try {
-  //     const user = await createUserWithEmailAndPassword(auth, signupEmail, signupPassword);
-  //     if (user) {
-  //       Alert.alert("Success", "Account created!");
-  //       setSignUpVisible(false);
-  //       router.replace("/(tabs)/one");
-  //     }
-  //   } catch (error: any) {
-  //     if (error.code === "auth/email-already-in-use") {
-  //       Alert.alert("Sign Up failed", "This email is already registered. Try logging in.");
-  //     } else {
-  //       Alert.alert("Sign Up failed", error.message);
-  //     }
-  //   }
-  // };
   const handleSignUp = async (signupEmail: string, signupPassword: string) => {
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, signupEmail, signupPassword);
-    const user = userCredential.user;
-
-    // Create their profile in Firestore
-    await createUserProfile(user);
-
-    Alert.alert("Success", "Account created!");
-    setSignUpVisible(false);
-
-    router.replace("/(tabs)/one");
-  } catch (error: any) {
-    if (error.code === "auth/email-already-in-use") {
-      Alert.alert("Sign Up failed", "This email is already registered. Try logging in.");
-    } else {
-      Alert.alert("Sign Up failed", error.message);
+    try {
+      const user = await createUserWithEmailAndPassword(
+        auth,
+        signupEmail,
+        signupPassword
+      );
+      if (user) {
+        Alert.alert("Success", "Account created!");
+        setSignUpVisible(false);
+        router.replace("/(tabs)/one");
+      }
+    } catch (error: any) {
+      if (error.code === "auth/email-already-in-use") {
+        Alert.alert(
+          "Sign Up failed",
+          "This email is already registered. Try logging in."
+        );
+      } else {
+        Alert.alert("Sign Up failed", error.message);
+      }
     }
-  }
-};
+  };
 
+  // --- UI ---
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.background }]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Global Dark/Light Toggle */}
+      <Pressable
+        onPress={toggleTheme}
+        style={{ alignSelf: "center", marginBottom: 20 }}
+      >
+        <Text style={{ color: theme.tint }}>
+          Switch to {mode === "dark" ? "Light" : "Dark"} Mode
+        </Text>
+      </Pressable>
+
       <Text style={[styles.title, { color: theme.text }]}>CalorieHawk</Text>
 
-      {/* Login form */}
+      {/* --- Login form --- */}
       <TextInput
         style={[
           styles.input,
           {
             backgroundColor: theme.inputBackground,
             color: theme.text,
-            borderColor: colorScheme === "dark" ? "#333" : "#ccc",
+            borderColor: mode === "dark" ? "#333" : "#ccc",
           },
         ]}
         placeholder="Email"
-        placeholderTextColor={colorScheme === "dark" ? "#aaa" : "#666"}
+        placeholderTextColor={mode === "dark" ? "#aaa" : "#666"}
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -148,11 +120,11 @@ React.useEffect(() => {
           {
             backgroundColor: theme.inputBackground,
             color: theme.text,
-            borderColor: colorScheme === "dark" ? "#333" : "#ccc",
+            borderColor: mode === "dark" ? "#333" : "#ccc",
           },
         ]}
         placeholder="Password"
-        placeholderTextColor={colorScheme === "dark" ? "#aaa" : "#666"}
+        placeholderTextColor={mode === "dark" ? "#aaa" : "#666"}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -165,21 +137,14 @@ React.useEffect(() => {
         <Text style={styles.buttonText}>Login</Text>
       </Pressable>
 
-      <Pressable
-        disabled={!request}
-        onPress={() => promptAsync()}
-        style={{
-          backgroundColor: "#fff",
-          padding: 12,
-          borderRadius: 8,
-          marginTop: 10,
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ color: "#000", fontWeight: "600" }}>
-          Sign in with Google
+      <Pressable onPress={handleForgotPassword}>
+        <Text style={[styles.link, { color: theme.tint }]}>
+          Forgot Password?
         </Text>
       </Pressable>
+
+      <View style={styles.divider} />
+
 
       <Pressable onPress={() => setSignUpVisible(true)}>
         <Text style={[styles.link, { color: theme.tint }]}>
@@ -187,10 +152,10 @@ React.useEffect(() => {
         </Text>
       </Pressable>
 
-      {/* Sign Up Modal */}
+      {/* --- Sign Up Modal --- */}
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={signUpVisible}
         onRequestClose={() => setSignUpVisible(false)}
       >
@@ -211,11 +176,11 @@ React.useEffect(() => {
                 {
                   backgroundColor: theme.background,
                   color: theme.text,
-                  borderColor: colorScheme === "dark" ? "#333" : "#ccc",
+                  borderColor: mode === "dark" ? "#333" : "#ccc",
                 },
               ]}
               placeholder="Email"
-              placeholderTextColor={colorScheme === "dark" ? "#aaa" : "#666"}
+              placeholderTextColor={mode === "dark" ? "#aaa" : "#666"}
               autoCapitalize="none"
               keyboardType="email-address"
               value={signupEmail}
@@ -227,11 +192,11 @@ React.useEffect(() => {
                 {
                   backgroundColor: theme.background,
                   color: theme.text,
-                  borderColor: colorScheme === "dark" ? "#333" : "#ccc",
+                  borderColor: mode === "dark" ? "#333" : "#ccc",
                 },
               ]}
               placeholder="Password"
-              placeholderTextColor={colorScheme === "dark" ? "#aaa" : "#666"}
+              placeholderTextColor={mode === "dark" ? "#aaa" : "#666"}
               secureTextEntry
               value={signupPassword}
               onChangeText={setSignupPassword}
@@ -254,6 +219,7 @@ React.useEffect(() => {
   );
 }
 
+// --- Styles ---
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", padding: 20 },
   title: {
@@ -283,5 +249,28 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 16,
     textAlign: "center",
+  },
+  googleButton: {
+    backgroundColor: "#fff",
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    marginTop: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleIcon: { width: 20, height: 20, marginRight: 10 },
+  googleText: { color: "#000", fontWeight: "600", fontSize: 15 },
+  divider: {
+    height: 1,
+    backgroundColor: "#ccc",
+    marginVertical: 18,
+    opacity: 0.4,
   },
 });

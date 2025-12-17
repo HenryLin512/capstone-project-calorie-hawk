@@ -31,6 +31,7 @@ dayjs.extend(isoWeek);
 import { auth, db } from '../../FireBaseConfig';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { ZERO_MACROS, type MacroTotals } from '../../utils/macroMath';
+import { useTheme } from '../ThemeContext';
 
 type ViewType = 'day' | 'week' | 'month' | 'year';
 
@@ -88,6 +89,7 @@ export default function HistoryTab() {
     foodName?: string;
     macros?: MacroSnap;
   } | null>(null);
+  const { theme, mode: themeMode } = useTheme();
 
   // subscribe once, then keep state fresh
   useEffect(() => {
@@ -278,16 +280,16 @@ export default function HistoryTab() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator />
-        <Text style={{ marginTop: 6 }}>Loading history…</Text>
-      </SafeAreaView>
-    );
-  }
+    <SafeAreaView style={[styles.center, { backgroundColor: theme.background }]}>
+      <ActivityIndicator color={theme.text} />
+      <Text style={{ marginTop: 6, color: theme.text }}>Loading history…</Text>
+    </SafeAreaView>
+  );
+}
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>History</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <Text style={[styles.title, { color: theme.text }]}>History</Text>
 
       {/* Toggle buttons */}
       <View style={styles.buttonsContainer}>
@@ -296,10 +298,10 @@ export default function HistoryTab() {
           return (
             <TouchableOpacity
               key={type}
-              style={[styles.button, active && styles.activeButton]}
+              style={[styles.button, active && { backgroundColor: theme.tint }]}
               onPress={() => setViewType(type)}
             >
-              <Text style={[styles.buttonText, { color: active ? '#fff' : '#111' }]}>
+              <Text style={[styles.buttonText, { color: active ? '#fff' : theme.text }]}>
                 {type.toUpperCase()}
               </Text>
             </TouchableOpacity>
@@ -315,8 +317,8 @@ export default function HistoryTab() {
           if (viewType !== 'day') {
             // Week / Month / Year: simple cards with totals
             return (
-              <View style={styles.card}>
-                <Text style={styles.date}>{item.label}</Text>
+              <View style={[styles.card, { backgroundColor: themeMode === 'dark' ? theme.card : '#fff' }]}>
+                <Text style={[styles.date, { color: theme.text }]}>{item.label}</Text>
                 <Text
                   style={[
                     styles.calories,
@@ -437,7 +439,7 @@ export default function HistoryTab() {
             </View>
           );
         }}
-        ListEmptyComponent={<Text style={styles.empty}>No data available</Text>}
+        ListEmptyComponent={<Text style={[styles.empty, { color: theme.text }]}>No data available</Text>}
         contentContainerStyle={{ padding: 16, paddingTop: 6 }}
       />
 
@@ -452,17 +454,17 @@ export default function HistoryTab() {
           style={styles.modalBackdrop}
           onPress={() => setSelectedPhoto(null)}
         >
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard,{ backgroundColor: themeMode === 'dark' ? theme.card : '#fff' }]}>
             {selectedPhoto && (
               <>
                 <Image
                   source={{ uri: selectedPhoto.url }}
                   style={styles.modalImage}
                 />
-                <Text style={styles.modalTitle}>
+                <Text style={[styles.modalTitle,{ color: theme.text }]}>
                   {selectedPhoto.foodName || selectedPhoto.meal}
                 </Text>
-                <Text style={styles.modalSubtitle}>
+                <Text style={[styles.modalSubtitle, { color: theme.text }]}>
                   {selectedPhoto.date} • {selectedPhoto.meal}
                 </Text>
                 <Text style={styles.modalKcal}>
@@ -471,7 +473,7 @@ export default function HistoryTab() {
                 </Text>
 
                 {selectedPhoto.macros && (
-                  <Text style={styles.modalMacros}>
+                  <Text style={[styles.modalMacros, { color: theme.text }]}>
                     P {selectedPhoto.macros.protein_g ?? '—'}g · C{' '}
                     {selectedPhoto.macros.carbs_g ?? '—'}g · F{' '}
                     {selectedPhoto.macros.fat_g ?? '—'}g
