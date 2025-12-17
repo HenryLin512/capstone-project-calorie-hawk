@@ -47,7 +47,7 @@ import {
   increment,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { useTheme } from '../ThemeContext'; 
+import { useTheme } from '../../utils/ThemeContext'; 
 
 
 // Utils

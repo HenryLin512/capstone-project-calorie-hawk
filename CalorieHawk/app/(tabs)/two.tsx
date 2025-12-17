@@ -18,7 +18,7 @@ import {
 } from "firebase/auth";
 import { auth } from "@/FireBaseConfig";
 import { router } from "expo-router";
-import { useTheme } from "../ThemeContext";
+import { useTheme } from "../../utils/ThemeContext";
 
 export default function SettingScreen() {
   const { theme, mode, setThemeMode } = useTheme();

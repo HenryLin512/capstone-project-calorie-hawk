@@ -31,7 +31,7 @@ dayjs.extend(isoWeek);
 import { auth, db } from '../../FireBaseConfig';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { ZERO_MACROS, type MacroTotals } from '../../utils/macroMath';
-import { useTheme } from '../ThemeContext';
+import { useTheme } from '../../utils/ThemeContext';
 
 type ViewType = 'day' | 'week' | 'month' | 'year';
 

@@ -6,7 +6,7 @@ import {
   scheduleDailyReminder,
   testNotificationNow,
 } from "../../utils/pushNotifications";
-import { useTheme } from "../ThemeContext"; 
+import { useTheme } from "../../utils/ThemeContext"; 
 
 export default function NotificationTest() {
   const { theme, mode } = useTheme(); 
