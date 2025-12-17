@@ -47,6 +47,8 @@ import {
   increment,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { useTheme } from '../ThemeContext'; 
+
 
 // Utils
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
@@ -116,7 +118,7 @@ const DONUT_INNER = DONUT_SIZE - DONUT_STROKE * 2;
 
 export default function Dashboard() {
   const insets = useSafeAreaInsets();
-
+  const { theme, mode: themeMode } = useTheme(); // ✅ renombrado
   const [meals, setMeals] = useState<Meal[]>(initialMeals);
   const [dailyGoal, setDailyGoal] = useState<number>(0);
 
@@ -284,12 +286,16 @@ export default function Dashboard() {
 
   async function scheduleFollowUpReminder(remainingKcal: number) {
     if (remainingKcal <= 0) return;
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Keep going!',
         body: `You still have about ${Math.round(remainingKcal)} kcal left today.`,
       },
-      trigger: { seconds: 90 * 60 }, // ~90 minutes later
+      trigger: {
+        seconds: 90 * 60, // ~90 minutes later
+        repeats: false,
+      } as Notifications.TimeIntervalTriggerInput,
     });
   }
 
@@ -589,8 +595,8 @@ export default function Dashboard() {
   const todayStr = dayjs().format('MMMM D, YYYY');
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
 
       {Platform.OS === 'web' && (
         <input
@@ -610,8 +616,8 @@ export default function Dashboard() {
           resizeMode="contain"
         />
         <View style={{ flex: 1 }}>
-          <Text style={styles.h1}>Today</Text>
-          <Text style={styles.subtle}>{todayStr}</Text>
+          <Text style={[styles.h1, { color: theme.text }]}>Today</Text>
+          <Text style={[styles.subtle,  { color: themeMode === 'dark' ? '#aaa' : COLORS.subtext }]}>{todayStr}</Text>
         </View>
         <Pressable onPress={() => router.push('/two')}>
           <Ionicons name="settings-outline" size={22} color={COLORS.subtext} />
@@ -619,7 +625,7 @@ export default function Dashboard() {
       </View>
 
       {/* Summary card with donut + Eaten/Goal */}
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: themeMode === 'dark' ? theme.card : COLORS.paper }] }>
         <View style={styles.donutWrapper}>
           <Donut
             size={DONUT_SIZE}
@@ -1338,6 +1344,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-
-
-

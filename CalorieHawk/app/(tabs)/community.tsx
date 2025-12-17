@@ -37,6 +37,7 @@ import {
 import { db, storage } from "../../FireBaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth } from "../../FireBaseConfig";
+import { useTheme } from "../ThemeContext";
 
 
 
@@ -119,7 +120,7 @@ export default function CommunityTab() {
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState<Record<string, string>>({});
   const scrollRef = useRef<ScrollView>(null);
-
+  const { theme, mode } = useTheme();
   
 
   /* ----------------------
@@ -357,9 +358,9 @@ export default function CommunityTab() {
   ------------------------*/
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text>Loading feed...</Text>
+      <View style={[styles.centered,{ backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.tint} />
+        <Text style={{ color: theme.text}}>Loading feed...</Text>
       </View>
     );
   }
@@ -384,7 +385,7 @@ export default function CommunityTab() {
 };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 , backgroundColor: theme.background }}>
       <FlatList
         data={posts}
         keyExtractor={(it) => it.id}
@@ -394,25 +395,25 @@ export default function CommunityTab() {
           const commentCount = Array.isArray(item.comments) ? item.comments.length : 0;
           const likedByViewer = Array.isArray(item.likedBy) && item.likedBy.includes("local-demo-user");
           return (
-            <View style={styles.card}>
+            <View style={[styles.card, {backgroundColor: mode === "dark" ? theme.card : "#fff" }]}>
               {/* header: profile pic + name + time */}
               <View style={styles.headerRow}>
                 {profile.photoURL ? (
                   <Image source={{ uri: profile.photoURL }} style={styles.avatar} />
                 ) : (
                   <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarInitial}>
+                    <Text style={[styles.avatarInitial, { color: theme.text }]}>
                       {(profile.displayName || "U").charAt(0).toUpperCase()}
                     </Text>
                   </View>
                 )}
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.displayName}>{profile.displayName}</Text>
-                  <Text style={styles.timeText}>{postTime}</Text>
+                  <Text style={[styles.displayName, { color: theme.text }]}>{profile.displayName}</Text>
+                  <Text style={[styles.timeText, { color: theme.text }]}>{postTime}</Text>
                 </View>
               </View>
 
-              <Text style={styles.postTitle}>{item.title}</Text>
+              <Text style={[styles.postTitle, { color: theme.text }]}>{item.title}</Text>
 
               {item.imageUrl ? (
                 <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
@@ -420,7 +421,7 @@ export default function CommunityTab() {
 
               <ShortText text={item.description} />
 
-              <Text style={styles.calories}>{item.calories ?? 0} kcal</Text>
+              <Text style={[styles.calories, { color: theme.tint }]}>{item.calories ?? 0} kcal</Text>
 
               {/* action bar */}
               <View style={styles.actions}>
@@ -529,7 +530,7 @@ export default function CommunityTab() {
       />
 
       {/* Floating Add Button */}
-      <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+      <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.tint }]} onPress={() => setModalVisible(true)}>
         <Text style={styles.addButtonText}>＋</Text>
       </TouchableOpacity>
 
