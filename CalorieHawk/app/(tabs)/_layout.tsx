@@ -12,7 +12,7 @@ function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
 }) {
-  return <FontAwesome size={24} style={{ marginBottom: -3 }} {...props} />;
+  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
 }
 
 export default function TabLayout() {
@@ -21,19 +21,15 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-          tabBarActiveTintColor: "#8B5CF6",
-          tabBarInactiveTintColor: "#a1a1aa",
-          tabBarLabelStyle: { fontSize: 11, marginBottom: 3 },
-          tabBarIconStyle: { marginTop: 3 },
+        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         // Disable the static render of the header on web
         // to prevent a hydration error in React Navigation v6.
         headerShown: useClientOnlyValue(false, true),
-        
       }}>
       <Tabs.Screen
         name="one"
         options={{
-          title: 'Home',
+          title: 'mainpage',
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
           headerRight: () => (
             <Link href="/modal" asChild>
@@ -41,7 +37,7 @@ export default function TabLayout() {
                 {({ pressed }) => (
                   <FontAwesome
                     name="info-circle"
-                    size={22}
+                    size={25}
                     color={Colors[colorScheme ?? 'light'].text}
                     style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
                   />
@@ -77,6 +73,13 @@ export default function TabLayout() {
         options={{
           title: 'Functions',
           tabBarIcon: ({ color }) => <TabBarIcon name="bars" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name = "community"
+        options = {{
+          title: "Community",
+          tabBarIcon: ({ color }) => <TabBarIcon name="users" color={color} />,
         }}
       />
     </Tabs>
