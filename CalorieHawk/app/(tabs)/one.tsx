@@ -70,6 +70,7 @@ import Donut from '../../components/Donut';
 // Notification
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '../../utils/pushNotifications';
+import { demoWelcomeNotification } from '../../utils/pushNotifications';
 
 type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Other';
 
@@ -159,6 +160,27 @@ export default function Dashboard() {
   );
   const remaining = Math.max(0, dailyGoal > 0 ? dailyGoal - eatenCalories : 0);
   const remainingPct = dailyGoal > 0 ? remaining / dailyGoal : 0;
+
+  //make sure the welcome notification only appear one when using app 
+  const demoShown = useRef(false);
+
+   //Welcome notification when start up.
+  useEffect(() => {
+    (async () => {
+      if (demoShown.current) return;
+      demoShown.current = true;
+
+      const { status } = await Notifications.requestPermissionsAsync();
+      console.log('Notification permission:', status);
+
+      if (status !== 'granted') return;
+
+      // ⏳ Delay is CRITICAL in production
+      setTimeout(() => {
+        demoWelcomeNotification();
+      }, 5000);
+    })();
+  }, []);
 
   // DAILY MACROS (for the top Carbs/Protein/Fat row)
   const dailyMacros = useMemo(
