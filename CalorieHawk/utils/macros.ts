@@ -67,8 +67,8 @@ export type GetMacrosOptions = {
   if (Platform.OS === "android") return "http://10.0.2.2:8000";
 
   // Physical devices on same Wi-Fi need your machine’s LAN IP
-  return "http://local:8000"; // ← change to your machine’s LAN IP if testing on device
-}*/
+  return "http://10.0.0.22:8000"; // ← change to your machine’s LAN IP if testing on device
+}
 
 //let BASE_URL = pickBase();
 let BASE_URL = "https://capstone-project-calorie-hawk.onrender.com";
@@ -77,6 +77,10 @@ export function setMacroApiBase(url: string) {
 }
 
 /* -------------------------- Mini Cache --------------------------- */
+let BASE_URL = "https://capstone-project-calorie-hawk.onrender.com";
+export function setMacroApiBase(url: string) {
+  BASE_URL = url.replace(/\/+$/, "");
+}
 
 type CacheKey = string;
 const cache = new Map<CacheKey, MacroServiceResponse>();

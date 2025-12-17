@@ -22,11 +22,13 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../FireBaseConfig';
 import dayjs from 'dayjs';
 import { router } from 'expo-router';
+import { useTheme } from '../../utils/ThemeContext'; // 👈 añadido para dark mode
 
 export default function GoalSetupScreen() {
   const [goal, setGoal] = useState('');
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
   const insets = useSafeAreaInsets();
+  const { theme, mode } = useTheme(); // 👈 obtiene colores globales
 
   const saveGoal = async () => {
     const kcal = Number(goal);
@@ -59,7 +61,7 @@ export default function GoalSetupScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -72,12 +74,20 @@ export default function GoalSetupScreen() {
             { paddingBottom: (Platform.OS === 'ios' ? insets.bottom : 16) + 24 },
           ]}
         >
-          <Text style={styles.title}>📅 Set Calorie Goal</Text>
+          <Text style={[styles.title, { color: theme.text }]}>📅 Set Calorie Goal</Text>
 
-          <Text style={styles.label}>Target Date</Text>
+          <Text style={[styles.label, { color: theme.text }]}>Target Date</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: mode === 'dark' ? theme.card : '#fff',
+                color: theme.text,
+                borderColor: mode === 'dark' ? '#555' : '#ccc',
+              },
+            ]}
             placeholder="YYYY-MM-DD"
+            placeholderTextColor={mode === 'dark' ? '#aaa' : '#666'}
             value={date}
             onChangeText={setDate}
             autoCapitalize="none"
@@ -85,23 +95,41 @@ export default function GoalSetupScreen() {
             returnKeyType="next"
           />
 
-          <Text style={styles.label}>Calorie Goal (kcal)</Text>
+          <Text style={[styles.label, { color: theme.text }]}>Calorie Goal (kcal)</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: mode === 'dark' ? theme.card : '#fff',
+                color: theme.text,
+                borderColor: mode === 'dark' ? '#555' : '#ccc',
+              },
+            ]}
             keyboardType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
             placeholder="e.g. 2200"
+            placeholderTextColor={mode === 'dark' ? '#aaa' : '#666'}
             value={goal}
             onChangeText={setGoal}
             returnKeyType="done"
             blurOnSubmit
           />
 
-          <Pressable style={styles.saveBtn} onPress={saveGoal}>
+          <Pressable
+            style={[styles.saveBtn, { backgroundColor: theme.button }]}
+            onPress={saveGoal}
+          >
             <Text style={styles.saveText}>Save Goal</Text>
           </Pressable>
 
           <Pressable style={styles.cancelBtn} onPress={() => router.back()}>
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text
+              style={[
+                styles.cancelText,
+                { color: mode === 'dark' ? '#aaa' : '#6B6A75' },
+              ]}
+            >
+              Cancel
+            </Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -134,4 +162,3 @@ const styles = StyleSheet.create({
   cancelBtn: { alignItems: 'center', marginTop: 16 },
   cancelText: { color: '#6B6A75', fontSize: 15 },
 });
-
