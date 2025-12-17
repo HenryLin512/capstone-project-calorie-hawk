@@ -119,8 +119,6 @@ const DONUT_INNER = DONUT_SIZE - DONUT_STROKE * 2;
 export default function Dashboard() {
   const insets = useSafeAreaInsets();
   const { theme, mode: themeMode } = useTheme(); // ✅ renombrado
-
-
   const [meals, setMeals] = useState<Meal[]>(initialMeals);
   const [dailyGoal, setDailyGoal] = useState<number>(0);
 
