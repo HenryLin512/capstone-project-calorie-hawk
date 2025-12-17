@@ -22,7 +22,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../FireBaseConfig';
 import dayjs from 'dayjs';
 import { router } from 'expo-router';
-import { useTheme } from '../ThemeContext'; // 👈 añadido para dark mode
+import { useTheme } from '../../utils/ThemeContext'; // 👈 añadido para dark mode
 
 export default function GoalSetupScreen() {
   const [goal, setGoal] = useState('');

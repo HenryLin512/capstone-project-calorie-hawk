@@ -16,7 +16,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../FireBaseConfig";
 import { router } from "expo-router";
-import { useTheme } from "./ThemeContext"; // ✅ Global theme context
+import { useTheme } from "../utils/ThemeContext"; // ✅ Global theme context
 
 
 

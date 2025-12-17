@@ -37,7 +37,7 @@ import {
 import { db, storage } from "../../FireBaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth } from "../../FireBaseConfig";
-import { useTheme } from "../ThemeContext";
+import { useTheme } from "../../utils/ThemeContext";
 
 
 
