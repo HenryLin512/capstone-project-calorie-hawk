@@ -30,7 +30,8 @@ git clone <our repository URL> in your VS Code
 * After cloning our repository in VS Code, from your terminal, type cd to change the directory into the CalorieHawk folder.
 
 * Then you will see a lot of red errors popping off because of  missing dependencies. Then type in the terminal the command below: 
-                     npm install
+
+                      npm install
 
 👉 Step 3 — Install Firebase
                       
