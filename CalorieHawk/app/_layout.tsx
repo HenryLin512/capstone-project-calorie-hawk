@@ -8,6 +8,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { useTheme } from '../utils/ThemeContext';
 
 import 'react-native-gesture-handler'; // keep first for navigation
 
@@ -20,7 +21,7 @@ if (Platform.OS !== 'web') {
 
 import { useColorScheme } from '@/components/useColorScheme';
 
-import { ThemeProvider as AppThemeProvider } from '../utils/ThemeContext';
+import { ThemeProvider } from '../utils/ThemeContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -41,17 +42,6 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  // useEffect(() => {
-  //   if (error) throw error;
-  // }, [error]);
-
-  // useEffect(() => {
-  //   if (loaded) {
-  //     SplashScreen.hideAsync();
-  //   }
-  // }, [loaded]);
-
   useEffect(() => {
     if (loaded || error) {
       SplashScreen.hideAsync();
@@ -66,18 +56,37 @@ export default function RootLayout() {
   }
 
   return (
-    <AppThemeProvider>
+    <ThemeProvider>
       <RootLayoutNav />
-    </AppThemeProvider>
+    </ThemeProvider>
   );
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+  const { theme, mode } = useTheme();
 
   return (
-    <NavigationThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+    <NavigationThemeProvider
+      value={{
+        dark: mode === 'dark',
+        colors: {
+          background: theme.background,
+          card: theme.card,
+          text: theme.text,
+          border: theme.border,
+          primary: theme.tint,
+          notification: theme.tint,
+        },
+        fonts: DefaultTheme.fonts,
+      }}
+    >
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: theme.card },
+          headerTitleStyle: { color: theme.text },
+          headerTintColor: theme.tint,
+        }}
+      >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>

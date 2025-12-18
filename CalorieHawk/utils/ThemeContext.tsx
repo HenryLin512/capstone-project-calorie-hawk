@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import Colors from "../constants/Colors";
+import type { Theme } from "../constants/Colors";
 
 type ThemeMode = "light" | "dark";
 
 type ThemeContextType = {
-  theme: typeof Colors.light;
+  //theme: typeof Colors.light;
+  theme: Theme;
   mode: ThemeMode;
   toggleTheme: () => void;
   setThemeMode: (mode: ThemeMode) => void;

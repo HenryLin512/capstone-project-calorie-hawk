@@ -15,6 +15,7 @@ import { auth, db, storage } from "../../FireBaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { router } from "expo-router";
+import { Stack } from "expo-router";
 
 import { Profile } from "../../types/Profile"; // adjust path if needed
 
@@ -95,30 +96,38 @@ export default function EditProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Edit Profile</Text>
-
-      <TouchableOpacity onPress={pickImage}>
-        {newPhoto ? (
-          <Image source={{ uri: newPhoto }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>+</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <Text style={styles.label}>Username</Text>
-      <TextInput
-        style={styles.input}
-        value={newName}
-        onChangeText={setNewName}
+    <>
+      <Stack.Screen
+        options={{
+          title: "Edit Profile",
+        }}
       />
+      
+      <View style={styles.container}>
+        <Text style={styles.header}>Edit Profile</Text>
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveText}>Save Changes</Text>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity onPress={pickImage}>
+          {newPhoto ? (
+            <Image source={{ uri: newPhoto }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>+</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.label}>Username</Text>
+        <TextInput
+          style={styles.input}
+          value={newName}
+          onChangeText={setNewName}
+        />
+
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+          <Text style={styles.saveText}>Save Changes</Text>
+        </TouchableOpacity>
+      </View>
+    </>
   );
 }
 
