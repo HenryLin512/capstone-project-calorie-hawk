@@ -50,6 +50,19 @@ git clone <our repository URL> in your VS Code and download Expo Go on your phon
 
 ✔️ The app will run instantly — no setup needed.
 
+-----
+🔗 Backend Hosting (Render) 
+
+Our macro–nutrition backend is hosted on Render and publicly accessible for testing:
+
+Render Backend URL:
+
+https://capstone-project-calorie-hawk.onrender.com
+
+(Used for AI macro + nutrition calculations.)
+
+⚠️ Hosting Disclaimer:
+This Render service has been prepaid and will remain active for at least 1 month after submission, ensuring full functionality for evaluation.
 _____________________________________________________________________________________________________
 
 # 🦅 Calorie Hawk
