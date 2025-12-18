@@ -1,3 +1,42 @@
+# 📘 Instruction for How to Use Our Calorie Hawk app:
+Option 1 — 📱 Run with Expo Go (Easiest & Recommended)
+👉 Step 1 — Install Expo Go
+  * Go to the App Store (iPhone) or Play Store (Android)
+  * Search for Expo Go
+  * Download & install
+
+👉 Step 2 — Open Your Camera
+  * Go to your camera on your phone (Make sure your camera can read QR code)
+
+👉 Step 3 — Scan the QR Code
+  * Here is the QR code link:
+https://expo.dev/preview/update?message=Complete+Build+v2&updateRuntimeVersion=1.0.0&createdAt=2025-12-18T07%3A31%3A01.995Z&slug=exp&projectId=b4a59533-2248-4d83-8604-77ef484d1287&group=e60d73c0-7bbe-4b47-978e-36dc4335ef79 
+  * Copy and paste this link into your browser to access the QR code
+  * Then point your camera at the QR code until you see "Open in Expo Go" (for iPhone)
+  * Tap on "Open in Expo Go", then wait for the app to load, and you are good to go and try our app!
+Note: To log in, just click on Sign Up, and create an email with @gmail.com and your password of choice.
+
+Option 2 — 💻 Run Locally from Code (For Full Testing)
+👉 Step 1 — Clone the Repository
+git clone <our repository URL> in your VS Code
+
+👉 Step 2 — Install Dependencies
+* After cloning our repository in VS Code, from your terminal, type cd to change the directory into the CalorieHawk folder.
+* Then you will see a lot of red errors popping off because of  missing dependencies. Then type in the terminal the command below: 
+                     npm install
+
+👉 Step 3 — Install Firebase
+                      npm install firebase
+⚠️ Caution: If after installing all dependencies and VS Code still displays red errors. Closing your VS Code and reopening it again will clear out all the red errors.
+
+👉 Step 4 — Start the App
+                      npx expo start
+                      Point the camera inside Expo Go to scan it
+
+✔️ The app will run instantly — no setup needed.
+
+_____________________________________________________________________________________________________
+
 # 🦅 Calorie Hawk
 
 Calorie Hawk is a lightweight, mobile-first calorie tracking application designed to make nutrition tracking **simple, accessible, and motivating**.  
