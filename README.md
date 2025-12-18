@@ -23,7 +23,7 @@ Note: To log in, just click on Sign Up, and create an email with @gmail.com and 
 Option 2 — 💻 Run Locally from Code (For Full Testing)
 
 👉 Step 1 — Clone the Repository
-git clone <our repository URL> in your VS Code
+git clone <our repository URL> in your VS Code and download Expo Go on your phone.
 
 👉 Step 2 — Install Dependencies
 
@@ -40,8 +40,12 @@ git clone <our repository URL> in your VS Code
 ⚠️ Caution: If after installing all dependencies and VS Code still displays red errors. Closing your VS Code and reopening it again will clear out all the red errors.
 
 👉 Step 4 — Start the App
+                      
                       npx expo start
-                      Point the camera inside Expo Go to scan it
+                      
+                      The expo will start building the app locally on your machine, and it will display the QR code in your terminal.
+
+                      Point your camera at the QR code to scan and wait for the app to finish setting up to use (Make sure you download Expo Go on Your Phone)
 
 ✔️ The app will run instantly — no setup needed.
 
