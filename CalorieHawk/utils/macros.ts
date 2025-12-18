@@ -72,7 +72,6 @@ export type GetMacrosOptions = {
 
 //let BASE_URL = pickBase();
 
-
 /* -------------------------- Mini Cache --------------------------- */
 let BASE_URL = "https://capstone-project-calorie-hawk.onrender.com";
 export function setMacroApiBase(url: string) {

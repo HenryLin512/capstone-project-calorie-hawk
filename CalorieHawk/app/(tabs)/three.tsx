@@ -1,15 +1,15 @@
-// app/(tabs)/three.tsx
-/**
- * History (real-time)
- * - Live updates via onSnapshot on /calories
- * - Day totals = signed sum of entries[].kcal (so Subtract works)
- * - Aggregations: Day / ISO Week / Month / Year
- * - Day view:
- *    - macro totals (P/C/F)
- *    - per-meal kcal
- *    - per-meal photos, each photo linked to its kcal + macros
- *    - tap a photo to see overlay with details
- */
+// // app/(tabs)/three.tsx
+// /**
+//  * History (real-time)
+//  * - Live updates via onSnapshot on /calories
+//  * - Day totals = signed sum of entries[].kcal (so Subtract works)
+//  * - Aggregations: Day / ISO Week / Month / Year
+//  * - Day view:
+//  *    - macro totals (P/C/F)
+//  *    - per-meal kcal
+//  *    - per-meal photos, each photo linked to its kcal + macros
+//  *    - tap a photo to see overlay with details
+//  */
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -280,12 +280,12 @@ export default function HistoryTab() {
 
   if (loading) {
     return (
-    <SafeAreaView style={[styles.center, { backgroundColor: theme.background }]}>
-      <ActivityIndicator color={theme.text} />
-      <Text style={{ marginTop: 6, color: theme.text }}>Loading history…</Text>
-    </SafeAreaView>
-  );
-}
+      <SafeAreaView style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator color={theme.text} />
+        <Text style={{ marginTop: 6, color: theme.text }}>Loading history…</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -298,10 +298,17 @@ export default function HistoryTab() {
           return (
             <TouchableOpacity
               key={type}
-              style={[styles.button, active && { backgroundColor: theme.tint }]}
+              style={[
+                styles.button, 
+                { backgroundColor: themeMode === 'dark' ? '#333' : '#eee' },
+                active && { backgroundColor: theme.tint }
+              ]}
               onPress={() => setViewType(type)}
             >
-              <Text style={[styles.buttonText, { color: active ? '#fff' : theme.text }]}>
+              <Text style={[
+                styles.buttonText, 
+                { color: active ? '#fff' : theme.text }
+              ]}>
                 {type.toUpperCase()}
               </Text>
             </TouchableOpacity>
@@ -317,7 +324,14 @@ export default function HistoryTab() {
           if (viewType !== 'day') {
             // Week / Month / Year: simple cards with totals
             return (
-              <View style={[styles.card, { backgroundColor: themeMode === 'dark' ? theme.card : '#fff' }]}>
+              <View style={[
+                styles.card, 
+                { 
+                  backgroundColor: theme.card,
+                  shadowColor: themeMode === 'dark' ? 'transparent' : '#000',
+                  elevation: themeMode === 'dark' ? 0 : 2,
+                }
+              ]}>
                 <Text style={[styles.date, { color: theme.text }]}>{item.label}</Text>
                 <Text
                   style={[
@@ -354,9 +368,16 @@ export default function HistoryTab() {
             mealOrder.some(m => (mealPhotos[m]?.length ?? 0) > 0);
 
           return (
-            <View style={styles.card}>
+            <View style={[
+              styles.card, 
+              { 
+                backgroundColor: theme.card,
+                shadowColor: themeMode === 'dark' ? 'transparent' : '#000',
+                elevation: themeMode === 'dark' ? 0 : 2,
+              }
+            ]}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.date}>{item.label}</Text>
+                <Text style={[styles.date, { color: theme.text }]}>{item.label}</Text>
                 <Text
                   style={[
                     styles.calories,
@@ -369,7 +390,7 @@ export default function HistoryTab() {
 
                 {/* Day-level macros line */}
                 {hasMacros && macros && (
-                  <Text style={styles.macrosLine}>
+                  <Text style={[styles.macrosLine, { color: theme.text }]}>
                     P {Math.round(macros.protein_g)}g · C {Math.round(macros.carbs_g)}g · F{' '}
                     {Math.round(macros.fat_g)}g
                   </Text>
@@ -383,7 +404,7 @@ export default function HistoryTab() {
                       if (!val) return null;
                       return (
                         <View key={meal} style={styles.mealRow}>
-                          <Text style={styles.mealLabel}>{meal}</Text>
+                          <Text style={[styles.mealLabel, { color: theme.text }]}>{meal}</Text>
                           <Text
                             style={[
                               styles.mealCalories,
@@ -409,7 +430,7 @@ export default function HistoryTab() {
                       return (
                         <View key={meal} style={styles.mealPhotoRowBlock}>
                           <View style={styles.mealPhotoHeaderRow}>
-                            <Text style={styles.mealPhotoLabel}>{meal}</Text>
+                            <Text style={[styles.mealPhotoLabel, { color: theme.text }]}>{meal}</Text>
                             <View style={styles.photoRow}>
                               {photosForMeal.map((p, idx) => (
                                 <Pressable
@@ -439,7 +460,11 @@ export default function HistoryTab() {
             </View>
           );
         }}
-        ListEmptyComponent={<Text style={[styles.empty, { color: theme.text }]}>No data available</Text>}
+        ListEmptyComponent={
+          <Text style={[styles.empty, { color: theme.text }]}>
+            No data available
+          </Text>
+        }
         contentContainerStyle={{ padding: 16, paddingTop: 6 }}
       />
 
@@ -451,23 +476,23 @@ export default function HistoryTab() {
         onRequestClose={() => setSelectedPhoto(null)}
       >
         <Pressable
-          style={styles.modalBackdrop}
+          style={[styles.modalBackdrop, { backgroundColor: themeMode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.35)' }]}
           onPress={() => setSelectedPhoto(null)}
         >
-          <View style={[styles.modalCard,{ backgroundColor: themeMode === 'dark' ? theme.card : '#fff' }]}>
+          <View style={[styles.modalCard, { backgroundColor: theme.card }]}>
             {selectedPhoto && (
               <>
                 <Image
                   source={{ uri: selectedPhoto.url }}
                   style={styles.modalImage}
                 />
-                <Text style={[styles.modalTitle,{ color: theme.text }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
                   {selectedPhoto.foodName || selectedPhoto.meal}
                 </Text>
                 <Text style={[styles.modalSubtitle, { color: theme.text }]}>
                   {selectedPhoto.date} • {selectedPhoto.meal}
                 </Text>
-                <Text style={styles.modalKcal}>
+                <Text style={[styles.modalKcal, { color: selectedPhoto.kcal >= 0 ? '#16A34A' : '#DC2626' }]}>
                   {selectedPhoto.kcal >= 0 ? '+' : '–'}
                   {Math.abs(selectedPhoto.kcal)} cal
                 </Text>
@@ -489,10 +514,22 @@ export default function HistoryTab() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  center: { 
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
 
-  container: { flex: 1, backgroundColor: '#fff' },
-  title: { fontSize: 24, fontWeight: '800', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+  container: { 
+    flex: 1 
+  },
+  title: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    paddingHorizontal: 16, 
+    paddingTop: 10, 
+    paddingBottom: 8 
+  },
 
   buttonsContainer: {
     flexDirection: 'row',
@@ -500,117 +537,128 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingHorizontal: 12,
   },
-  button: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#eee' },
-  activeButton: { backgroundColor: '#5B21B6' },
-  buttonText: { fontWeight: '700' },
+  button: { 
+    paddingVertical: 8, 
+    paddingHorizontal: 12, 
+    borderRadius: 10 
+  },
+  buttonText: { 
+    fontWeight: '700' 
+  },
 
   card: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
     marginHorizontal: 16,
-    shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
-  date: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  calories: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
+  date: { 
+    fontSize: 16, 
+    fontWeight: '700', 
+    marginBottom: 4 
+  },
+  calories: { 
+    fontSize: 16, 
+    fontWeight: '800', 
+    marginBottom: 2 
+  },
 
   // macros line
   macrosLine: {
     fontSize: 13,
-    color: '#6B7280',
     marginBottom: 4,
   },
 
   // Per-meal kcal breakdown
-  mealBreakdown: { marginTop: 2, marginBottom: 4 },
+  mealBreakdown: { 
+    marginTop: 2, 
+    marginBottom: 4 
+  },
   mealRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 2,
   },
-  mealLabel: { fontSize: 13, color: '#374151', fontWeight: '500' },
-  mealCalories: { fontSize: 13, fontWeight: '700' },
+  mealLabel: { 
+    fontSize: 13, 
+    fontWeight: '500' 
+  },
+  mealCalories: { 
+    fontSize: 13, 
+    fontWeight: '700' 
+  },
 
   // Per-meal photo groups
-  mealPhotosBlock: { marginTop: 4 },
-  mealPhotoRowBlock: { marginTop: 4 },
+  mealPhotosBlock: { 
+    marginTop: 4 
+  },
+  mealPhotoRowBlock: { 
+    marginTop: 4 
+  },
   mealPhotoHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between', // label on left, photos on right (same line)
   },
-  mealPhotoLabel: { fontSize: 12, color: '#4B5563', fontWeight: '600' },
+  mealPhotoLabel: { 
+    fontSize: 12, 
+    fontWeight: '600' 
+  },
 
-  photoRow: { flexDirection: 'row', gap: 6, marginLeft: 8 },
-  thumb: { width: 36, height: 36, borderRadius: 8 },
+  photoRow: { 
+    flexDirection: 'row', 
+    gap: 6, 
+    marginLeft: 8 
+  },
+  thumb: { 
+    width: 36, 
+    height: 36, 
+    borderRadius: 8 
+  },
 
-  empty: { textAlign: 'center', marginTop: 40, fontSize: 16, color: '#888' },
+  empty: { 
+    textAlign: 'center', 
+    marginTop: 40, 
+    fontSize: 16 
+  },
 
   // photo overlay
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCard: {
     width: '80%',
-    backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
   },
-  modalImage: { width: 120, height: 120, borderRadius: 12, marginBottom: 10 },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 2 },
-  modalSubtitle: { fontSize: 13, color: '#6B7280', marginBottom: 6 },
-  modalKcal: { fontSize: 16, fontWeight: '800', color: '#16A34A', marginBottom: 4 },
-  modalMacros: { fontSize: 14, color: '#4B5563', textAlign: 'center' },
+  modalImage: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 12, 
+    marginBottom: 10 
+  },
+  modalTitle: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    marginBottom: 2 
+  },
+  modalSubtitle: { 
+    fontSize: 13, 
+    marginBottom: 6 
+  },
+  modalKcal: { 
+    fontSize: 16, 
+    fontWeight: '800', 
+    marginBottom: 4 
+  },
+  modalMacros: { 
+    fontSize: 14, 
+    textAlign: 'center' 
+  },
 });
-
-
-
-
-// DO NOT DELETE THIS since I can reuse some of it later
-//fetch from Firestore
-  // useEffect(() => {
-  //   const fetchData = async () => {
-  //     if (!user) 
-  //       return;
-  //     try {
-  //       const userID = auth.currentUser.uid;
-  //       const q = collection(db, "users", user?.uid, "calories");
-  //       const snapshot = await getDocs(q);
-
-  //       //const data = snapshot.docs.map(doc => doc.data());
-  //       //let data: any[] = []; // an array can hold anything (object, strings, numbers, etc.)
-  //       // Map date -> total calories for that day
-  //       const dataMap: { [date: string]: number } = {};
-
-  //       snapshot.docs.forEach(docSnap => 
-  //         {
-  //         const entries = docSnap.data().entries || [];
-  //         const totalKcal = entries.reduce((sum: number, entry: any) => sum + entry.kcal, 0)
-  //         // entries.forEach((entry: any) => 
-  //         //   {
-  //         //   data.push({
-  //         //     date: docSnap.id,
-  //         //     calories: entry.kcal,
-  //         //   });
-  //         // });
-  //         dataMap[docSnap.id] = totalKcal;
-  //       });
-
-  //       const data = Object.entries(dataMap).map(([date, calories]) => ({ date, calories}));
-  //       setAllData(data); // save all raw entries
-  //     } catch (error) {
-  //       console.error("Error fetching calories:", error);
-  //     }
-  //   };
-
-  //   fetchData();
-  // }, [user]);

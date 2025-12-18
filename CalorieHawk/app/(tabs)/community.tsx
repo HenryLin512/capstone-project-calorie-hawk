@@ -1,4 +1,9 @@
-// app/(tabs)/CommunityTab.tsx
+// app/(tabs)/community.tsx
+/**
+ * Calorie Hawk - Community Tab
+ * - Where users can see each other posts 
+ * - Share, like and comments on each other posts
+ */
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
@@ -15,6 +20,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Share,
+  TouchableWithoutFeedback,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -24,6 +30,7 @@ import {
   getDocs,
   getDoc,
   addDoc,
+  deleteDoc,
   updateDoc,
   doc,
   query,
@@ -33,12 +40,15 @@ import {
   arrayRemove,
   increment,
   DocumentData,
+  Timestamp,
 } from "firebase/firestore";
 import { db, storage } from "../../FireBaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth } from "../../FireBaseConfig";
+import { router } from "expo-router"; 
+import { Ionicons } from "@expo/vector-icons";
+import { Animated, Easing } from "react-native";
 import { useTheme } from "../../utils/ThemeContext";
-
 
 
 /* ----------------------
@@ -48,14 +58,19 @@ type RecipeDoc = {
   id: string;
   title: string;
   author: string; // visible name
-  authorId?: string | null; // optional user id (if you later add auth)
+  authorId?: string | null; // user id
   description: string;
   imageUrl?: string;
   calories?: number;
   createdAt?: any;
   likes?: number;
-  likedBy?: string[]; // optional array of uids or usernames
-  comments?: string[]; // simple array of comment texts (could be expanded to objects)
+  likedBy?: string[]; // array of uids or usernames
+  comments?: {
+    uid: string;
+    text: string;
+    createdAt: any;
+  }[]; // simple array of comment texts (could be expanded to objects)
+  editedAt?: Date | null;
 };
 
 export type Profile = {
@@ -84,14 +99,20 @@ function timeAgo(date?: Date | null) {
 }
 
 /* ShortText component with read-more */
-const ShortText: React.FC<{ text: string; limit?: number }> = ({ text, limit = 180 }) => {
+const ShortText: React.FC<{ text: string; limit?: number; theme: any }> = ({
+  text,
+  limit = 180,
+  theme,
+}) => {
   const [expanded, setExpanded] = useState(false);
   const isLong = text.length > limit;
+
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={() => isLong && setExpanded((s) => !s)}>
-      <Text style={styles.desc}>
+    <TouchableOpacity activeOpacity={0.9} onPress={() => isLong && setExpanded(!expanded)}>
+      <Text style={[styles.desc, { color: theme.text }]}>
         {expanded || !isLong ? text : text.slice(0, limit) + "…"}
       </Text>
+
       {!expanded && isLong && <Text style={styles.readMore}>Read more</Text>}
       {expanded && isLong && <Text style={styles.readMore}>Read less</Text>}
     </TouchableOpacity>
@@ -105,13 +126,14 @@ export default function CommunityTab() {
   const [posts, setPosts] = useState<RecipeDoc[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // profiles lookup: key by uid and by username (if present)
+  // profiles lookup: key by uid and by username 
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
 
   // post creation state
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState("");
-  const [author, setAuthor] = useState(""); // user-entered name for now
+  
+
   const [description, setDescription] = useState("");
   const [calories, setCalories] = useState("");
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -120,8 +142,43 @@ export default function CommunityTab() {
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState<Record<string, string>>({});
   const scrollRef = useRef<ScrollView>(null);
+
+  // menu option for delete and edit
+  const [menuPostId, setMenuPostId] = useState<string | null>(null);
+
+  // Edition option
+  const [editingPost, setEditingPost] = useState<RecipeDoc | null>(null);
+
+  //create animation value
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  //show and hide addbutton
+  const [showAddButton, setShowAddButton] = useState(true);
+
+  const migrateOldPosts = async () => {
+      const postsSnap = await getDocs(collection(db, "recipes"));
+      const usersSnap = await getDocs(collection(db, "users"));
+
+      const userMap: Record<string, string> = {};
+      usersSnap.forEach(u => {
+        const data = u.data();
+        if (data.displayName) {
+          userMap[data.displayName] = u.id;
+        }
+      });
+
+      postsSnap.forEach(async post => {
+        const data = post.data();
+        if (!data.authorId && data.author) {
+          const uid = userMap[data.author];
+          if (uid) {
+            await updateDoc(post.ref, { authorId: uid });
+          }
+        }
+    });
+  };
+  //To use dark mode 
   const { theme, mode } = useTheme();
-  
 
   /* ----------------------
      Real-time posts listener
@@ -146,6 +203,9 @@ export default function CommunityTab() {
             likes: data.likes ?? 0,
             likedBy: data.likedBy ?? [],
             comments: data.comments ?? [],
+            editedAt: data.editedAt
+              ? (data.editedAt.toDate ? data.editedAt.toDate() : new Date(data.editedAt))
+              : null,
           });
         });
         setPosts(list);
@@ -162,7 +222,6 @@ export default function CommunityTab() {
 
   /* ----------------------
      Fetch user profiles lookup (small cache)
-     - We fetch once here. If you want live profiles, convert to onSnapshot as well.
   ------------------------*/
   useEffect(() => {
     let mounted = true;
@@ -192,9 +251,27 @@ export default function CommunityTab() {
     };
   }, []);
 
-  /* ----------------------
+  useEffect(() => {
+    if (Object.keys(profiles).length > 0) {
+      migrateOldPosts();
+    }
+  }, [profiles]);
+
+  /* -----------------------------------
+     Animate when modal opens/closes
+  -----------------------------------*/
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: modalVisible ? 1 : 0,
+      duration: 280,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [modalVisible]);
+
+  /* -----------------------------
      Image picking + compression
-  ------------------------*/
+  -----------------------------*/
   const pickImage = async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -236,17 +313,46 @@ export default function CommunityTab() {
     return url;
   };
 
-  /* ----------------------
-     Create post
-  ------------------------*/
-  const handlePost = async () => {
-    if (!title.trim() || !author.trim() || !description.trim() || !calories.trim()) {
-      Alert.alert("Missing fields", "Please fill all fields.");
+  const startEdit = (item: RecipeDoc) => {
+    setMenuPostId(null);
+
+    setEditingPost(item);
+    setTitle(item.title);
+    setDescription(item.description || "");
+    setCalories(item.calories?.toString() || "");
+    setImageUri(item.imageUrl || null);
+
+    setModalVisible(true);
+  };
+
+  /* ---------------------------
+     reset Post Form if cancel
+  -----------------------------*/
+  const resetPostForm = () => {
+    setTitle("");
+    setDescription("");
+    setCalories("");
+    setImageUri(null);
+    setEditingPost(null);
+  };
+
+  /* ---------------------------
+     Create post and edit post
+  -----------------------------*/
+  const handleSavePost = async () => {
+    if (!title.trim()) {
+      Alert.alert("Missing title", "Title is required.");
       return;
     }
+
     try {
-      let imageUrl = '';
-      if (imageUri) {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      let imageUrl = editingPost?.imageUrl ?? null;
+
+      // upload new image ONLY if changed
+      if (imageUri && imageUri !== editingPost?.imageUrl) {
         const imageRef = ref(storage, `recipes/${Date.now()}.jpg`);
         const response = await fetch(imageUri);
         const blob = await response.blob();
@@ -254,48 +360,53 @@ export default function CommunityTab() {
         imageUrl = await getDownloadURL(imageRef);
       }
 
-      const user = auth.currentUser;
-      if (!user) {
-        Alert.alert("Error", "You must be logged in to post.");
-        return;
+      if (editingPost) {
+        // ✏️ UPDATE POST
+        await updateDoc(doc(db, "recipes", editingPost.id), {
+          title: title.trim(),
+          description: description.trim() || null,
+          calories: calories ? Number(calories) : null,
+          imageUrl,
+          editedAt: serverTimestamp(),
+        });
+      } else {
+        // ➕ CREATE POST
+        const profileSnap = await getDoc(doc(db, "users", user.uid));
+        const profile = profileSnap.data();
+
+        await addDoc(collection(db, "recipes"), {
+          title: title.trim(),
+          description: description.trim() || null,
+          calories: calories ? Number(calories) : null,
+          imageUrl,
+
+          authorId: user.uid,
+          authorName: profile?.displayName || "Anonymous",
+          authorPhoto: profile?.photoURL || null,
+
+          likes: 0,
+          likedBy: [],
+          comments: [],
+          createdAt: serverTimestamp(),
+        });
       }
 
-      const profileSnap = await getDoc(doc(db, "users", user.uid));
-      const profile = profileSnap.data();
-
-      await addDoc(collection(db, "recipes"), {
-        title,
-        description,
-        imageUrl,
-        calories: Number(calories),
-
-        // NEW PROFILE FIELDS
-        authorId: user.uid,
-        authorName: profile?.displayName || "Anonymous",
-        authorPhoto: profile?.photoURL || null,
-
-        createdAt: serverTimestamp(),
-      });
-
-      // reset
+      // reset modal
       setTitle("");
-      setAuthor("");
       setDescription("");
       setCalories("");
       setImageUri(null);
+      setEditingPost(null);
       setModalVisible(false);
-      // real-time listener will update posts
+
     } catch (e) {
-      console.error("post error", e);
-      Alert.alert("Error", "Failed to create post.");
+      console.error(e);
+      Alert.alert("Error", "Failed to save post.");
     }
   };
 
-  /* ----------------------
-     Like / Unlike - toggle by saving username in likedBy (since no auth)
-     We'll use the provided author name as a unique identifier for now (not secure).
-     When you add auth, replace `viewerId` with currentUser.uid
-  ------------------------*/
+
+  
   const toggleLike = async (post: RecipeDoc) => {
     try {
       const postRef = doc(db, "recipes", post.id);
@@ -320,27 +431,29 @@ export default function CommunityTab() {
   };
 
   /* ----------------------
-     Comments: view / add
-     We'll save comments as simple objects in array like "username:commentText" to preserve who posted.
-     (You can later upgrade to comment objects with timestamp and uid).
+     Comments: view / add.
   ------------------------*/
   const submitComment = async (postId: string) => {
-    const text = (commentText[postId] || "").trim();
-    if (!text) return;
-    try {
-      const postRef = doc(db, "recipes", postId);
-      // for now store "LocalUser: comment text"
-      const commenter = "LocalUser"; // replace with auth when available
-      const commentPayload = `${commenter}: ${text}`;
-      await updateDoc(postRef, {
-        comments: arrayUnion(commentPayload),
-      });
-      setCommentText((s) => ({ ...s, [postId]: "" }));
-      // real-time will refresh comment list
-    } catch (e) {
-      console.error("comment error", e);
-    }
-  };
+  const text = (commentText[postId] || "").trim();
+  if (!text) return;
+
+  try {
+    const postRef = doc(db, "recipes", postId);
+
+    await updateDoc(postRef, {
+      comments: arrayUnion({
+        uid: auth.currentUser!.uid,
+        text,
+        createdAt: Timestamp.now(), // ✅ FIX
+      }),
+    });
+
+    setCommentText((s) => ({ ...s, [postId]: "" }));
+  } catch (e) {
+    console.error("comment error", e);
+    Alert.alert("Error", "Failed to post comment");
+  }
+};
 
   /* ----------------------
      Helpers for profile lookup display
@@ -358,9 +471,9 @@ export default function CommunityTab() {
   ------------------------*/
   if (loading) {
     return (
-      <View style={[styles.centered,{ backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.tint} />
-        <Text style={{ color: theme.text}}>Loading feed...</Text>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text>Loading feed...</Text>
       </View>
     );
   }
@@ -369,49 +482,114 @@ export default function CommunityTab() {
      SharePost
   ------------------------*/
   const sharePost = async (item: RecipeDoc) => {
-  try {
-    const message =
-      `${item.title}\n\n${item.description}` +
-      `\n\nCalories: ${item.calories ?? 0} kcal` +
-      (item.imageUrl ? `\n\nImage: ${item.imageUrl}` : "");
+    try {
+      const message =
+        `${item.title}\n\n${item.description}` +
+        `\n\nCalories: ${item.calories ?? 0} kcal` +
+        (item.imageUrl ? `\n\nImage: ${item.imageUrl}` : "");
 
-    await Share.share({
-      message,
-      title: item.title,
-    });
-  } catch (error) {
-    Alert.alert("Error", "Failed to share post.");
-  }
-};
+      await Share.share({
+        message,
+        title: item.title,
+      });
+    } catch (error) {
+      Alert.alert("Error", "Failed to share post.");
+    }
+  };
+
+  /* ----------------------
+     DeletePost
+  ------------------------*/
+  const deletePost = async (postId: string) => {
+    Alert.alert("Delete post?", "This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await deleteDoc(doc(db, "recipes", postId));
+        },
+      },
+    ]);
+  };
+
+  
 
   return (
-    <View style={{ flex: 1 , backgroundColor: theme.background }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <FlatList
         data={posts}
         keyExtractor={(it) => it.id}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={() => setShowAddButton(false)}
+        onScrollEndDrag={() => setShowAddButton(true)}
         renderItem={({ item }) => {
           const profile = findProfileForPost(item);
           const postTime = item.createdAt ? timeAgo(item.createdAt as Date) : "";
+          const isOwner = auth.currentUser?.uid === item.authorId;
           const commentCount = Array.isArray(item.comments) ? item.comments.length : 0;
           const likedByViewer = Array.isArray(item.likedBy) && item.likedBy.includes("local-demo-user");
+          
           return (
-            <View style={[styles.card, {backgroundColor: mode === "dark" ? theme.card : "#fff" }]}>
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
               {/* header: profile pic + name + time */}
+              
               <View style={styles.headerRow}>
-                {profile.photoURL ? (
-                  <Image source={{ uri: profile.photoURL }} style={styles.avatar} />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={[styles.avatarInitial, { color: theme.text }]}>
-                      {(profile.displayName || "U").charAt(0).toUpperCase()}
+                <View style={{ flexDirection: "row", flex: 1, alignItems: "center" }}>
+                  <TouchableOpacity onPress={() => router.push(`/profile/${profile.uid}`)}>
+                  {profile.photoURL ? (
+                    <Image source={{ uri: profile.photoURL }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarInitial}>
+                        {(profile.displayName || "U").charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={[styles.displayName, { color: theme.text }]}>
+                      {profile.displayName}
+                    </Text>
+                    <Text style={[styles.timeText, { color: theme.text }]}>
+                      {postTime}
+                      {item.editedAt && " · Edited"}
                     </Text>
                   </View>
-                )}
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.displayName, { color: theme.text }]}>{profile.displayName}</Text>
-                  <Text style={[styles.timeText, { color: theme.text }]}>{postTime}</Text>
                 </View>
+
+                {isOwner && (
+                <TouchableOpacity onPress={() => setMenuPostId(item.id)}>
+                  <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+                </TouchableOpacity>
+                )}
               </View>
+
+              {menuPostId === item.id && (
+                <TouchableWithoutFeedback onPress={() => setMenuPostId(null)}>
+                  <View style={styles.menuBackdrop}>
+                    <View style={styles.menu}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setMenuPostId(null);
+                          startEdit(item);
+                        }}
+                      >
+                        <Text style={styles.menuItem}>Edit</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setMenuPostId(null);
+                          deletePost(item.id);
+                        }}
+                      >
+                        <Text style={[styles.menuItem, { color: "red" }]}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableWithoutFeedback>
+              )}
 
               <Text style={[styles.postTitle, { color: theme.text }]}>{item.title}</Text>
 
@@ -419,20 +597,25 @@ export default function CommunityTab() {
                 <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
               ) : null}
 
-              <ShortText text={item.description} />
+              <ShortText text={item.description} theme={theme} />
 
-              <Text style={[styles.calories, { color: theme.tint }]}>{item.calories ?? 0} kcal</Text>
+              {typeof item.calories === "number" && item.calories > 0 && (
+                <Text style={[styles.calories, { color: theme.tint }]}>{item.calories} kcal</Text>
+              )}
 
               {/* action bar */}
               <View style={styles.actions}>
-                <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item)}>
-                  <Text style={[styles.actionText, likedByViewer && { color: "#e0245e" }]}>
+                <TouchableOpacity 
+                style={[styles.actionBtn, { backgroundColor: theme.card }]} 
+                onPress={() => toggleLike(item)}
+                >
+                  <Text style={[styles.actionText,  likedByViewer && { color: "#e0245e" }]}>
                     {likedByViewer ? "❤️" : "🤍"} {item.likes ?? 0}
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.actionBtn}
+                  style={[styles.actionBtn, { backgroundColor: theme.card }]}
                   onPress={() =>
                     setExpandedComments((s) => ({ ...s, [item.id]: !s[item.id] }))
                   }
@@ -444,7 +627,7 @@ export default function CommunityTab() {
                   <Text style={styles.actionText}>↗ Share</Text>
                 </TouchableOpacity>
               </View>
-
+              
               {/* Comments area (collapsed by default) */}
               {expandedComments[item.id] ? (
                 <KeyboardAvoidingView
@@ -460,13 +643,10 @@ export default function CommunityTab() {
                     style={styles.commentsSection}
                   >
                     {commentCount === 0 ? (
-                      <Text style={styles.noComments}>No comments yet — be the first!</Text>
+                      <Text style={[styles.noComments, { color: theme.text }]}>No comments yet — be the first!</Text>
                     ) : (
                       (item.comments || []).map((c, idx) => {
-                        const parts = String(c).split(": ");
-                        const commenterName = parts.shift() || "User";
-                        const commentBody = parts.join(": ");
-                        const commenterProfile = profiles[commenterName] ?? null;
+                        const commenterProfile = profiles[c.uid];
 
                         return (
                           <View key={idx} style={styles.commentRow}>
@@ -476,16 +656,24 @@ export default function CommunityTab() {
                                 style={styles.commentAvatar}
                               />
                             ) : (
-                              <View style={styles.commentAvatarPlaceholder}>
-                                <Text style={styles.commentAvatarInitial}>
-                                  {commenterName.charAt(0).toUpperCase()}
+                              // <View style={styles.commentAvatarPlaceholder}>
+                              //   <Text style={styles.commentAvatarInitial}>
+                              <View style={[styles.commentAvatarPlaceholder, 
+                                { backgroundColor: theme.border || "#ddd" }]}>
+                                <Text style={[styles.commentAvatarInitial, 
+                                  { color: theme.text || "#444" }]}>
+                                  {(commenterProfile?.displayName || "U")
+                                    .charAt(0)
+                                    .toUpperCase()}
                                 </Text>
                               </View>
                             )}
 
                             <View style={{ flex: 1 }}>
-                              <Text style={styles.commentAuthor}>{commenterName}</Text>
-                              <ShortText text={commentBody} limit={120} />
+                              <Text style={[styles.commentAuthor, { color: theme.text }]}>
+                                {commenterProfile?.displayName || "Unknown"}
+                              </Text>
+                              <Text style={{ color: theme.text }}>{c.text}</Text>
                             </View>
                           </View>
                         );
@@ -497,6 +685,7 @@ export default function CommunityTab() {
                   <View style={styles.addCommentRow}>
                     <TextInput
                       placeholder="Write a comment..."
+                      placeholderTextColor={theme.text + "80"} // 50% opacity
                       value={commentText[item.id] ?? ""}
                       onChangeText={(t) => {
                         setCommentText((s) => ({ ...s, [item.id]: t }));
@@ -504,13 +693,20 @@ export default function CommunityTab() {
                           scrollRef.current?.scrollToEnd({ animated: true });
                         }, 50);
                       }}
-                      style={styles.commentInput}
+                      style={[
+                        styles.commentInput,
+                        { 
+                          borderColor: theme.border, 
+                          backgroundColor: theme.background,
+                          color: theme.text 
+                        }
+                      ]}
                       multiline
                     />
 
                     <TouchableOpacity
-                      style={styles.commentPostBtn}
-                      onPress={() => submitComment(item.id)}
+                      style={[styles.commentPostBtn, 
+                        { backgroundColor: theme.tint || "#007AFF" }]}
                     >
                       <Text style={{ color: "#fff", fontWeight: "600" }}>Post</Text>
                     </TouchableOpacity>
@@ -521,7 +717,7 @@ export default function CommunityTab() {
                   onPress={() => setExpandedComments((s) => ({ ...s, [item.id]: true }))}
                   style={{ paddingTop: 8 }}
                 >
-                  <Text style={styles.viewComments}>View comments ({commentCount})</Text>
+                  <Text style={[styles.viewComments, { color: theme.tint }]}>View comments ({commentCount})</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -530,43 +726,122 @@ export default function CommunityTab() {
       />
 
       {/* Floating Add Button */}
-      <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.tint }]} onPress={() => setModalVisible(true)}>
-        <Text style={styles.addButtonText}>＋</Text>
-      </TouchableOpacity>
+      {showAddButton && (
+        <TouchableOpacity
+          style={[
+            styles.addButton,
+            {
+              backgroundColor: mode === "light" ? "#FFD646" : "#9D00FF",
+            },
+          ]}
+          onPress={() => setModalVisible(true)}
+        >
+          <Text
+            style={[
+              styles.addButtonText,
+              { color: mode === "light" ? "#5B21B6" : theme.card },
+            ]}
+          >
+            ＋
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* New post modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="none" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <ScrollView>
-              <Text style={styles.modalTitle}>Create a Post</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+            style={{ width: "100%" }}
+          >
+            <Animated.View
+              style={[
+                styles.modalContainer, 
+                { backgroundColor: theme.card },
+                { transform: [
+                    {
+                      translateY: slideAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [60, 0],
+                      }),
+                    },
+                  ],
+                  opacity: slideAnim,
+                },
+              ]}
+            >
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 40 }}
+              >
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Create a Post</Text>
 
-              <TextInput placeholder="Title" style={styles.input} value={title} onChangeText={setTitle} />
-              <TextInput placeholder="Your Name" style={styles.input} value={author} onChangeText={setAuthor} />
-              <TextInput
-                placeholder="Description"
-                style={[styles.input, { height: 100 }]}
-                value={description}
-                onChangeText={setDescription}
-                multiline
-              />
-              <TextInput placeholder="Calories" style={styles.input} keyboardType="numeric" value={calories} onChangeText={setCalories} />
+                <TextInput
+                  placeholder="Title (required)"
+                  placeholderTextColor="#888"
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+                  value={title}
+                  onChangeText={setTitle}
+                />
 
-              <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-                <Text>{imageUri ? "Change Image" : "Pick Image"}</Text>
-              </TouchableOpacity>
-              {imageUri ? <Image source={{ uri: imageUri }} style={styles.previewImage} /> : null}
+                <TextInput
+                  placeholder="Description (optional)"
+                  placeholderTextColor="#888"
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }, { height: 100 }]}
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                />
 
-              <View style={styles.buttonRow}>
-                <TouchableOpacity style={[styles.button, styles.cancel]} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.buttonText}>Cancel</Text>
+                <TextInput
+                  placeholder="Calories (optional)"
+                  placeholderTextColor="#888"
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+                  keyboardType="numeric"
+                  value={calories}
+                  onChangeText={setCalories}
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.imagePicker,
+                    { borderColor: theme.tint }
+                  ]}
+                  onPress={pickImage}
+                >
+                  <Text style={{ color: theme.text }}>
+                    {imageUri ? "Change Image" : "Pick Image"}
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.button, styles.post]} onPress={handlePost}>
-                  <Text style={styles.buttonText}>Post</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
+
+                {imageUri && (
+                  <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                )}
+
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.cancel]}
+                    onPress={() => {
+                      resetPostForm();
+                      setModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.buttonText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.button, styles.post]}
+                    onPress={handleSavePost}
+                  >
+                    <Text style={styles.buttonText}>
+                      {editingPost ? "Save Changes" : "Post"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </Animated.View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
@@ -590,6 +865,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  
 
   headerRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#ddd" },
@@ -642,11 +918,34 @@ const styles = StyleSheet.create({
   commentPostBtn: { backgroundColor: "#007AFF", padding: 10, borderRadius: 8 },
 
   /* Add button + modal */
-  addButton: { position: "absolute", bottom: Platform.OS === "ios" ? 34 : 24, right: 20, backgroundColor: "#007AFF", width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", elevation: 4 },
+  addButton: {
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 90 : 70,
+    right: 16,
+    backgroundColor: "#9D00FF",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 6,
+  },
   addButtonText: { fontSize: 32, color: "#fff", marginBottom: 4 },
 
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
-  modalContainer: { backgroundColor: "#fff", width: "92%", padding: 16, borderRadius: 12, maxHeight: "86%" },
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: "rgba(0,0,0,0.4)", 
+    justifyContent: "center", 
+    //alignItems: "center" 
+    },
+  
+  modalContainer: { 
+    backgroundColor: "#fff", 
+    width: "92%", 
+    alignSelf: "center",
+    padding: 16, 
+    borderRadius: 12, 
+    maxHeight: "86%" },
 
   modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 12, textAlign: "center" },
   input: { borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, marginBottom: 10 },
@@ -659,303 +958,36 @@ const styles = StyleSheet.create({
   cancel: { backgroundColor: "#ccc" },
   post: { backgroundColor: "#007AFF" },
   buttonText: { color: "#fff", fontWeight: "700" },
+
+  /* Add Menu + menuItem */
+  menuBackdrop: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  zIndex: 10,
+},
+
+menu: {
+  position: "absolute",
+  top: 30,
+  right: 10,
+  backgroundColor: "#fff",
+  borderRadius: 8,
+  paddingVertical: 6,
+  paddingHorizontal: 10,
+  shadowColor: "#000",
+  shadowOpacity: 0.15,
+  shadowRadius: 6,
+  elevation: 5,
+},
+
+menuItem: {
+  paddingVertical: 8,
+  fontSize: 16,
+  fontWeight: "500",
+},
 });
 
 
-// import React, { useEffect, useState } from 'react';
-// import {
-//   View,
-//   Text,
-//   FlatList,
-//   Image,
-//   StyleSheet,
-//   ActivityIndicator,
-//   TouchableOpacity,
-//   Modal,
-//   TextInput,
-//   Alert,
-//   ScrollView,
-// } from 'react-native';
-// import * as ImagePicker from 'expo-image-picker';
-// import { collection, getDocs, addDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
-// import { db, storage } from '../../FireBaseConfig'; // adjust if needed
-// import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-
-
-// interface Recipe {
-//   id: string;
-//   title: string;
-//   author: string;
-//   description: string;
-//   imageUrl: string;
-//   calories: number;
-//   createdAt: string;
-// }
-
-
-// export default function CommunityTab() {
-
-//   const [recipes, setRecipes] = useState<Recipe[]>([]);
-//   const [loading, setLoading] = useState(true);
-//   const [modalVisible, setModalVisible] = useState(false);
-
-//   const [title, setTitle] = useState('');
-//   const [author, setAuthor] = useState('');
-//   const [description, setDescription] = useState('');
-//   const [calories, setCalories] = useState('');
-//   const [imageUri, setImageUri] = useState<string | null>(null);
-
-
-//   useEffect(() => {
-//     fetchRecipes();
-//   }, []);
-
-//   const fetchRecipes = async () => {
-//     try {
-//       const q = query(collection(db, 'recipes'), orderBy('createdAt', 'desc'));
-//       const querySnapshot = await getDocs(q);
-//       const recipeList: Recipe[] = [];
-//       querySnapshot.forEach((doc) => {
-//         recipeList.push({ id: doc.id, ...doc.data() } as Recipe);
-//       });
-//       setRecipes(recipeList);
-//     } catch (error) {
-//       console.error('Error fetching recipes:', error);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const pickImage = async () => {
-//     const result = await ImagePicker.launchImageLibraryAsync({
-//        mediaTypes: ['images'],
-//       quality: 0.7,
-//     });
-
-//     if (!result.canceled) {
-//       setImageUri(result.assets[0].uri);
-//     }
-//   };
-
-//   const handlePostRecipe = async () => {
-//     if (!title || !author || !description || !calories) {
-//       Alert.alert('Missing Info', 'Please fill out all fields.');
-//       return;
-//     }
-
-//     try {
-//       let imageUrl = '';
-//       if (imageUri) {
-//         // Upload to Firebase Storage
-//         const imageRef = ref(storage, `recipes/${Date.now()}.jpg`);
-//         const response = await fetch(imageUri);
-//         const blob = await response.blob();
-//         await uploadBytes(imageRef, blob);
-//         imageUrl = await getDownloadURL(imageRef);
-//       }
-
-//       await addDoc(collection(db, 'recipes'), {
-//         title,
-//         author,
-//         description,
-//         imageUrl,
-//         calories: Number(calories),
-//         createdAt: serverTimestamp(),
-//       });
-
-//       Alert.alert('Success', 'Recipe posted!');
-//       setModalVisible(false);
-//       setTitle('');
-//       setAuthor('');
-//       setDescription('');
-//       setCalories('');
-//       setImageUri(null);
-//       fetchRecipes();
-//     } catch (error) {
-//       console.error('Error posting recipe:', error);
-//       Alert.alert('Error', 'Failed to post recipe.');
-//     }
-//   };
-
-//   if (loading) {
-//     return (
-//       <View style={styles.centered}>
-//         <ActivityIndicator size="large" color="#007AFF" />
-//         <Text>Loading community recipes...</Text>
-//       </View>
-//     );
-//   }
-
-//   if (recipes.length === 0) {
-//     return (
-//       <View style={styles.centered}>
-//         <Text>No recipes yet — be the first to share one!</Text>
-//       </View>
-//     );
-//   }
-
-//     return (
-//         <View style={{ flex: 1 }}>
-//       <FlatList
-//         data={recipes}
-//         keyExtractor={(item) => item.id}
-//         renderItem={({ item }) => (
-//           <View style={styles.card}>
-//             {item.imageUrl ? (
-//               <Image source={{ uri: item.imageUrl }} style={styles.image} />
-//             ) : (
-//               <View style={styles.imagePlaceholder}>
-//                 <Text>No Image</Text>
-//               </View>
-//             )}
-//             <View style={styles.info}>
-//               <Text style={styles.title}>{item.title}</Text>
-//               <Text style={styles.author}>By {item.author}</Text>
-//               <Text style={styles.desc}>{item.description}</Text>
-//               <Text style={styles.calories}>{item.calories} kcal</Text>
-//             </View>
-//           </View>
-//         )}
-//       />
-
-//       {/* Floating Add Button */}
-//       <TouchableOpacity
-//         style={styles.addButton}
-//         onPress={() => setModalVisible(true)}
-//       >
-//         <Text style={styles.addButtonText}>＋</Text>
-//       </TouchableOpacity>
-
-//       {/* Modal for new recipe */}
-//       <Modal visible={modalVisible} animationType="slide" transparent>
-//         <View style={styles.modalOverlay}>
-//           <View style={styles.modalContainer}>
-//             <ScrollView>
-//               <Text style={styles.modalTitle}>Share a Recipe</Text>
-//               <TextInput
-//                 placeholder="Title"
-//                 placeholderTextColor="#555"
-//                 style={styles.input}
-//                 value={title}
-//                 onChangeText={setTitle}
-//               />
-//               <TextInput
-//                 placeholder="Your Name"
-//                 placeholderTextColor="#555"
-//                 style={styles.input}
-//                 value={author}
-//                 onChangeText={setAuthor}
-//               />
-//               <TextInput
-//                 placeholder="Description"
-//                 placeholderTextColor="#555"
-//                 style={[styles.input, { height: 80 }]}
-//                 value={description}
-//                 multiline
-//                 onChangeText={setDescription}
-//               />
-//               <TextInput
-//                 placeholder="Calories"
-//                 placeholderTextColor="#555"
-//                 keyboardType="numeric"
-//                 style={styles.input}
-//                 value={calories}
-//                 onChangeText={setCalories}
-//               />
-
-//               <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
-//                 <Text>{imageUri ? 'Change Image' : 'Pick an Image'}</Text>
-//               </TouchableOpacity>
-//               {imageUri && <Image source={{ uri: imageUri }} style={styles.previewImage} />}
-
-//               <View style={styles.buttonRow}>
-//                 <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.button, styles.cancel]}>
-//                   <Text style={styles.buttonText}>Cancel</Text>
-//                 </TouchableOpacity>
-//                 <TouchableOpacity onPress={handlePostRecipe} style={[styles.button, styles.post]}>
-//                   <Text style={styles.buttonText}>Post</Text>
-//                 </TouchableOpacity>
-//               </View>
-//             </ScrollView>
-//           </View>
-//         </View>
-//       </Modal>
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-//   card: {
-//     backgroundColor: '#fff',
-//     margin: 10,
-//     borderRadius: 12,
-//     shadowColor: '#000',
-//     shadowOpacity: 0.1,
-//     shadowOffset: { width: 0, height: 2 },
-//     shadowRadius: 6,
-//     elevation: 3,
-//     overflow: 'hidden',
-//   },
-//   image: { width: '100%', height: 180 },
-//   imagePlaceholder: {
-//     width: '100%',
-//     height: 180,
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     backgroundColor: '#eee',
-//   },
-//   info: { padding: 12 },
-//   title: { fontSize: 20, fontWeight: 'bold' },
-//   author: { color: '#777', marginTop: 4, marginBottom: 6 },
-//   desc: { fontSize: 15, color: '#333' },
-//   calories: { marginTop: 6, color: '#007AFF', fontWeight: '600' },
-//   addButton: {
-//     position: 'absolute',
-//     bottom: 20,
-//     right: 20,
-//     backgroundColor: '#007AFF',
-//     width: 60,
-//     height: 60,
-//     borderRadius: 30,
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     elevation: 5,
-//   },
-//   addButtonText: { fontSize: 32, color: '#fff', marginBottom: 2 },
-//   modalOverlay: {
-//     flex: 1,
-//     backgroundColor: 'rgba(0,0,0,0.4)',
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//   },
-//   modalContainer: {
-//     backgroundColor: '#fff',
-//     borderRadius: 16,
-//     padding: 20,
-//     width: '90%',
-//     maxHeight: '80%',
-//   },
-//   modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
-//   input: {
-//     borderWidth: 1,
-//     borderColor: '#ccc',
-//     borderRadius: 10,
-//     padding: 10,
-//     marginBottom: 10,
-//   },
-//   imagePicker: {
-//     borderWidth: 1,
-//     borderColor: '#007AFF',
-//     borderRadius: 10,
-//     padding: 10,
-//     alignItems: 'center',
-//     marginBottom: 10,
-//   },
-//   previewImage: { width: '100%', height: 150, borderRadius: 10, marginBottom: 10 },
-//   buttonRow: { flexDirection: 'row', justifyContent: 'space-between' },
-//   button: { flex: 1, padding: 12, borderRadius: 10, marginHorizontal: 5 },
-//   cancel: { backgroundColor: '#ccc' },
-//   post: { backgroundColor: '#007AFF' },
-//   buttonText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-// });

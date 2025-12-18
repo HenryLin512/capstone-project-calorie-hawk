@@ -47,7 +47,6 @@ import {
   increment,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { useTheme } from '../../utils/ThemeContext';
 
 // Utils
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
@@ -60,6 +59,7 @@ import {
   type MacroSnap as HelperMacroSnap,
 } from '../../utils/macroHelpers';
 import { sumEntriesMacros, perMealGoals, round1 } from '../../utils/mealMacros';
+import { useTheme } from '../../utils/ThemeContext'; 
 
 // UI helpers
 import MacroPebble from '@/components/MacroPebble';
@@ -69,6 +69,7 @@ import Donut from '../../components/Donut';
 // Notification
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '../../utils/pushNotifications';
+import { demoWelcomeNotification } from '../../utils/pushNotifications';
 
 type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Other';
 
@@ -154,6 +155,8 @@ export default function Dashboard() {
   const webFileRef = useRef<HTMLInputElement | null>(null);
   const todayKey = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
 
+
+
   // calories eaten from all meals
   const eatenCalories = useMemo(
     () => meals.reduce((sum, m) => sum + m.entries.reduce((a, e) => a + e.kcal, 0), 0),
@@ -161,6 +164,27 @@ export default function Dashboard() {
   );
   const remaining = Math.max(0, dailyGoal > 0 ? dailyGoal - eatenCalories : 0);
   const remainingPct = dailyGoal > 0 ? remaining / dailyGoal : 0;
+
+  //make sure the welcome notification only appear one when using app 
+  const demoShown = useRef(false);
+
+   //Welcome notification when start up.
+  useEffect(() => {
+    (async () => {
+      if (demoShown.current) return;
+      demoShown.current = true;
+
+      const { status } = await Notifications.requestPermissionsAsync();
+      console.log('Notification permission:', status);
+
+      if (status !== 'granted') return;
+
+      // ⏳ Delay is CRITICAL in production
+      setTimeout(() => {
+        demoWelcomeNotification();
+      }, 5000);
+    })();
+  }, []);
 
   // DAILY MACROS (for the top Carbs/Protein/Fat row)
   const dailyMacros = useMemo(
@@ -354,7 +378,7 @@ export default function Dashboard() {
     setMode(nextMode);
     setEntryKcal(String(Math.max(0, Math.abs(next))));
 
-    if (macroSnapshot) setKcalOverrideAfterEstimate(true);
+    //if (macroSnapshot) setKcalOverrideAfterEstimate(true);
   };
 
   // ✅ Updated: clear unlocks autofill
@@ -600,7 +624,8 @@ export default function Dashboard() {
   const todayStr = dayjs().format('MMMM D, YYYY');
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+    //<SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
 
       {Platform.OS === 'web' && (
@@ -622,22 +647,18 @@ export default function Dashboard() {
         />
         <View style={{ flex: 1 }}>
           <Text style={[styles.h1, { color: theme.text }]}>Today</Text>
-          <Text
-            style={[
-              styles.subtle,
-              { color: themeMode === 'dark' ? '#aaa' : COLORS.subtext },
-            ]}
-          >
-            {todayStr}
-          </Text>
+          {/*<Text style={[styles.subtle,  { color: themeMode === 'dark' ? '#aaa' : COLORS.subtext }]}>{todayStr}</Text>*/}
+          <Text style={[styles.subtle, { color: theme.subtext }]}>{todayStr}</Text>
         </View>
         <Pressable onPress={() => router.push('/two')}>
-          <Ionicons name="settings-outline" size={22} color={COLORS.subtext} />
+          {/*<Ionicons name="settings-outline" size={22} color={COLORS.subtext} /> */}
+          <Ionicons name="settings-outline" size={22} color={theme.subtext} />
         </Pressable>
       </View>
 
       {/* Summary card with donut + Eaten/Goal */}
-      <View style={[styles.card, { backgroundColor: themeMode === 'dark' ? theme.card : COLORS.paper }]}>
+      {/* <View style={[styles.card, { backgroundColor: themeMode === 'dark' ? theme.card : COLORS.paper }] }> */}
+      <View style={[styles.card, { backgroundColor: theme.card }]}>
         <View style={styles.donutWrapper}>
           <Donut
             size={DONUT_SIZE}
@@ -657,8 +678,13 @@ export default function Dashboard() {
             >
               {dailyGoal > 0 ? (
                 <>
-                  <Text style={styles.remaining}>{remaining.toLocaleString()}</Text>
-                  <Text style={styles.remainingLabel}>Remaining</Text>
+                  {/* <Text style={styles.remaining}> */}
+                  <Text style={[styles.remaining, { color: theme.text }]}>
+                    {remaining.toLocaleString()}
+                  </Text>
+                  {/* <Text style={styles.remainingLabel}>Remaining</Text> */}
+                  <Text style={[styles.remainingLabel, { color: theme.subtext }]}>Remaining</Text>
+
                 </>
               ) : (
                 <>
@@ -673,13 +699,22 @@ export default function Dashboard() {
         </View>
 
         <View style={styles.goalRow}>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>Eaten</Text>
-            <Text style={styles.goalNumber}>{eatenCalories.toLocaleString()} kcal</Text>
+          <View style={[styles.goalItem, { backgroundColor: theme.card }]}>
+            <Text style={[styles.goalLabel, { color: theme.subtext }]}>
+              Eaten
+            </Text>
+            <Text style={[styles.goalNumber, { color: theme.text }]}>
+              {eatenCalories.toLocaleString()} kcal
+            </Text>
           </View>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>Goal</Text>
-            <Text style={styles.goalNumber}>{dailyGoal.toLocaleString()} kcal</Text>
+          
+          <View style={[styles.goalItem, { backgroundColor: theme.card }]}>
+            <Text style={[styles.goalLabel, { color: theme.subtext }]}>
+              Goal
+            </Text>
+            <Text style={[styles.goalNumber, { color: theme.text }]}>
+              {dailyGoal.toLocaleString()} kcal
+            </Text>
           </View>
         </View>
       </View>
@@ -723,7 +758,8 @@ export default function Dashboard() {
           };
 
           return (
-            <View style={styles.mealCard}>
+            // <View style={styles.mealCard}>
+            <View style={[styles.mealCard, { backgroundColor: theme.card }]}>
               <View style={{ flex: 1, paddingRight: 12 }}>
                 <View style={styles.mealLeft}>
                   <Donut
@@ -736,16 +772,17 @@ export default function Dashboard() {
                     <View />
                   </Donut>
                   <View style={{ marginLeft: 12, flex: 1 }}>
-                    <Text style={styles.mealTitle}>{item.label}</Text>
-                    <Text style={styles.mealSub}>
+                    {/* <Text style={styles.mealTitle}>{item.label}</Text> */}
+                    <Text style={[styles.mealTitle, { color: theme.text }]}>{item.label}</Text>
+                    {/* <Text style={styles.mealSub}> */}
+                    <Text style={[styles.mealSub, { color: theme.subtext }]}>
                       {Math.max(consumed, 0)} {item.target ? ` / ${item.target}` : ''} Cal
                     </Text>
 
                     {/* compact macro numbers + tiny bars */}
                     <View style={{ marginTop: 6 }}>
-                      <Text style={[styles.mealSub, { marginBottom: 4 }]}>
-                        C {round1(display.carbs_g)}g • P {round1(display.protein_g)}g • F{' '}
-                        {round1(display.fat_g)}g
+                      <Text style={[styles.mealSub, { marginBottom: 4, color: theme.text }]}>
+                        C {round1(display.carbs_g)}g • P {round1(display.protein_g)}g • F {round1(display.fat_g)}g
                         {pending ? '  (est.)' : ''}
                       </Text>
                       <MiniMacroBars
@@ -777,16 +814,20 @@ export default function Dashboard() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 120 : 0}
         >
-          <View style={[styles.sheet, { paddingBottom: 8 + insets.bottom }]}>
+          {/* <View style={[styles.sheet, { paddingBottom: 8 + insets.bottom }]}> */}
+          <View style={[styles.sheet,{ backgroundColor: theme.card, paddingBottom: 8 + insets.bottom }]}>
             <ScrollView keyboardShouldPersistTaps="handled">
               {/* Header */}
               <View style={styles.sheetHeader}>
                 <Pressable onPress={cancelSheet}>
-                  <Text style={styles.sheetCancel}>Cancel</Text>
+                  {/* <Text style={styles.sheetCancel}>Cancel</Text> */}
+                  <Text style={[styles.sheetCancel, { color: theme.subtext }]}>Cancel</Text>
                 </Pressable>
-                <Text style={styles.sheetTitle}>{activeMeal}</Text>
+                {/* <Text style={styles.sheetTitle}>{activeMeal}</Text> */}
+                <Text style={[styles.sheetTitle, { color: theme.text }]}>{activeMeal}</Text>
                 <Pressable onPress={saveEntry}>
-                  <Text style={styles.sheetSave}>Save</Text>
+                  {/* <Text style={styles.sheetSave}>Save</Text> */}
+                  <Text style={[styles.sheetSave, { color: theme.tint }]}>Save</Text>
                 </Pressable>
               </View>
 
@@ -794,35 +835,83 @@ export default function Dashboard() {
               <View style={styles.segmentRow}>
                 <Pressable
                   onPress={() => setMode('add')}
-                  style={[styles.segmentBtn, mode === 'add' && styles.segmentBtnActive]}
+                  style={[
+                    styles.segmentBtn,
+                    // mode === 'add' && styles.segmentBtnActive,
+                    { backgroundColor: theme.card, borderColor: theme.border }, 
+                    mode === 'add' && { backgroundColor: theme.muted },          
+                  ]}
                 >
-                  <Text style={[styles.segmentText, mode === 'add' && styles.segmentTextActive]}>
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      { color: theme.text }, // normal text color
+                      // mode === 'add' && styles.segmentTextActive,
+                      mode === 'add' && { color: theme.tint } // active = purple
+                    ]}
+                  >
                     Add
                   </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setMode('sub')}
-                  style={[styles.segmentBtn, mode === 'sub' && styles.segmentBtnActive]}
+                  style={[
+                    styles.segmentBtn,
+                    //mode === 'sub' && styles.segmentBtnActive,
+                    { backgroundColor: theme.card, borderColor: theme.border },
+                    mode === 'sub' && { backgroundColor: theme.muted }
+                  ]}
                 >
-                  <Text style={[styles.segmentText, mode === 'sub' && styles.segmentTextActive]}>
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      // mode === 'sub' && styles.segmentTextActive,
+                        { color: theme.text },
+                        mode === 'sub' && { color: theme.tint },
+                    ]}
+                  >
                     Subtract
                   </Text>
                 </Pressable>
-                <Pressable onPress={clearKcal} style={styles.clearBtn}>
-                  <Ionicons name="trash-outline" size={18} color={COLORS.text} />
-                  <Text style={{ marginLeft: 6, color: COLORS.text, fontWeight: '600' }}>Clear</Text>
+                {/* <Pressable onPress={clearKcal} style={styles.clearBtn}> */}
+                <Pressable onPress={clearKcal} style={[styles.clearBtn,{ backgroundColor: theme.muted }]}>
+                  <Ionicons
+                    name="trash-outline"
+                    size={18}
+                    // color={COLORS.text}
+                    color={theme.text}
+                  />
+                  <Text
+                    style={{
+                      marginLeft: 6,
+                      //color: COLORS.text,
+                      color: theme.text,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Clear
+                  </Text>
                 </Pressable>
               </View>
 
               {/* kcal input + +/- steppers */}
               <View style={styles.kcalWrap}>
                 <View style={styles.kcalInputRow}>
-                  <Pressable onPress={() => adjustKcal(-KCAL_STEP)} style={[styles.stepperBtn, { backgroundColor: COLORS.mutedBg }]}>
-                    <Text style={styles.stepperText}>–</Text>
+                  <Pressable
+                    onPress={() => adjustKcal(-KCAL_STEP)}
+                    style={[
+                      styles.stepperBtn,
+                      // { backgroundColor: COLORS.mutedBg },
+                      { backgroundColor: theme.muted },
+                    ]}
+                  >
+                    {/* <Text style={styles.stepperText}>–</Text> */}
+                    <Text style={[styles.stepperText, { color: theme.text }]}>–</Text>
                   </Pressable>
 
                   <TextInput
-                    style={styles.kcalInput}
+                    //style={styles.kcalInput}
+                    style={[styles.kcalInput, { color: theme.text, borderBottomColor: theme.border }]}
                     value={entryKcal}
                     onChangeText={setKcalFromText}
                     placeholder="0"
@@ -833,36 +922,63 @@ export default function Dashboard() {
                     onSubmitEditing={Keyboard.dismiss}
                   />
 
-                  <Pressable onPress={() => adjustKcal(+KCAL_STEP)} style={[styles.stepperBtn, { backgroundColor: COLORS.mutedBg }]}>
-                    <Text style={styles.stepperText}>＋</Text>
+                  <Pressable
+                    onPress={() => adjustKcal(+KCAL_STEP)}
+                    style={[
+                      styles.stepperBtn,
+                      // { backgroundColor: COLORS.mutedBg },
+                      { backgroundColor: theme.muted },
+                    ]}
+                  >
+                    {/* <Text style={styles.stepperText}>＋</Text> */}
+                    {/* <Text style={[styles.stepperText, { color: theme.text }]}>＋</Text> */}
+                    <Text style={[styles.stepperText, { color: theme.text }]}>＋</Text>
                   </Pressable>
                 </View>
 
                 <Text style={styles.kcalUnit}>kcal</Text>
 
                 {suggestedFoodName ? (
-                  <Text style={{ marginTop: 6, color: COLORS.subtext }}>
+                  // <Text style={{ marginTop: 6, color: COLORS.subtext }}>
+                  <Text style={{ marginTop: 6, color: theme.subtext }}>
                     AI suggestion:{' '}
-                    <Text style={{ fontWeight: '700', color: COLORS.text }}>{suggestedFoodName}</Text>
+                    {/* <Text style={{ fontWeight: '700', color: COLORS.text }}> */}
+                    <Text style={{ fontWeight: '700', color: theme.text }}>
+                      {suggestedFoodName}
+                    </Text>
                   </Text>
                 ) : null}
               </View>
 
               {/* Photo & Macro buttons */}
-              <View style={[styles.suggestionsRow, { justifyContent: 'flex-start', gap: 12 }]}>
-                <Pressable style={styles.photoBtn} onPress={handleAddPhoto}>
-                  <Ionicons name="image-outline" size={22} color={COLORS.text} />
+              <View
+                style={[
+                  styles.suggestionsRow,
+                  { justifyContent: 'flex-start', gap: 12 },
+                ]}
+              >
+                {/* <Pressable style={styles.photoBtn} onPress={handleAddPhoto}> */}
+                <Pressable style={[styles.photoBtn, { backgroundColor: theme.muted }]} onPress={handleAddPhoto}>
+                  <Ionicons
+                    name="image-outline"
+                    size={22}
+                    //color={COLORS.text}
+                    color={theme.text}
+                  />
                 </Pressable>
 
                 <Pressable
-                  style={[styles.photoBtn, { paddingHorizontal: 14 }]}
+                  style={[styles.photoBtn, { paddingHorizontal: 14, backgroundColor: theme.muted }]}
                   onPress={openGramsPrompt}
                   disabled={macroBusy}
                 >
                   {macroBusy ? (
                     <ActivityIndicator />
                   ) : (
-                    <Text style={{ fontWeight: '700', color: COLORS.text }}>Estimate macros</Text>
+                    // <Text style={{ fontWeight: '700', color: COLORS.text }}>
+                    <Text style={{ fontWeight: '700', color: theme.text }}>
+                      Estimate macros
+                    </Text>
                   )}
                 </Pressable>
 
@@ -913,10 +1029,15 @@ export default function Dashboard() {
 
               {macroSnapshot ? (
                 <View style={{ marginTop: 8, paddingHorizontal: 16 }}>
-                  <Text style={{ fontWeight: '700', marginBottom: 4 }}>Estimated macros (scaled):</Text>
-                  <Text style={{ color: COLORS.subtext }}>
-                    kcal: {macroSnapshot.kcal ?? '—'} | P: {macroSnapshot.protein_g ?? '—'} g | F:{' '}
-                    {macroSnapshot.fat_g ?? '—'} g | C: {macroSnapshot.carbs_g ?? '—'} g
+                  <Text style={{ fontWeight: '700', marginBottom: 4 }}>
+                    Estimated macros (scaled):
+                  </Text>
+                  {/* <Text style={{ color: COLORS.subtext }}> */}
+                  <Text style={{ color: theme.subtext }}>
+                    kcal: {macroSnapshot.kcal ?? '—'} | P:{' '}
+                    {macroSnapshot.protein_g ?? '—'} g | F:{' '}
+                    {macroSnapshot.fat_g ?? '—'} g | C:{' '}
+                    {macroSnapshot.carbs_g ?? '—'} g
                   </Text>
                 </View>
               ) : null}
@@ -940,18 +1061,55 @@ function MiniMacroBars({
   fat: number;
   goals: { carbs_g: number; protein_g: number; fat_g: number };
 }) {
-  const Row = ({ label, value, goal }: { label: string; value: number; goal: number }) => {
+  const { theme } = useTheme();
+  const Row = ({
+    label,
+    value,
+    goal,
+  }: {
+    label: string;
+    value: number;
+    goal: number;
+  }) => {
     const pct = goal > 0 ? Math.min(1, Math.max(0, value / goal)) : 0;
     return (
       <View style={{ marginBottom: 4 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-          <Text style={{ fontSize: 11, color: '#6B6A75' }}>{label}</Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginBottom: 2,
+          }}
+        >
+          {/* <Text style={{ fontSize: 11, color: '#6B6A75' }}>{label}</Text>
           <Text style={{ fontSize: 11, color: '#6B6A75' }}>
             {round1(value)}g {goal ? `/ ${round1(goal)}g` : ''}
-          </Text>
+          </Text> */}
+        <Text style={{ fontSize: 11, color: theme.text }}>
+          {label}
+        </Text>
+
+        <Text style={{ fontSize: 11, color: theme.text }}>
+          {round1(value)}g {goal ? `/ ${round1(goal)}g` : ''}
+        </Text>
         </View>
-        <View style={{ height: 5, backgroundColor: '#EEE', borderRadius: 4, overflow: 'hidden' }}>
-          <View style={{ width: `${pct * 100}%`, height: 5, backgroundColor: '#5B21B6' }} />
+        <View
+          style={{
+            height: 5,
+            //backgroundColor: '#EEE',
+            backgroundColor: theme.border,
+            borderRadius: 4,
+            overflow: 'hidden',
+          }}
+        >
+          <View
+            style={{
+              width: `${pct * 100}%`,
+              height: 5,
+              //backgroundColor: '#5B21B6',
+              backgroundColor: theme.tint
+            }}
+          />
         </View>
       </View>
     );
@@ -967,7 +1125,10 @@ function MiniMacroBars({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
+  safe: { flex: 1, 
+          //backgroundColor: COLORS.bg 
+        },
+  
 
   headerRow: {
     flexDirection: 'row',
@@ -978,8 +1139,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logo: { width: 44, height: 44, borderRadius: 8, resizeMode: 'contain' },
-  h1: { fontSize: 34, fontWeight: '800', color: COLORS.text },
-  subtle: { color: COLORS.subtext, marginTop: 2 },
+
+  h1: { 
+    fontSize: 34, 
+    fontWeight: '800', 
+    //color: COLORS.text 
+  },
+
+  subtle: { //color: COLORS.subtext, 
+            marginTop: 2 },
 
   card: {
     margin: 16,
@@ -1011,11 +1179,26 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     alignItems: 'center',
   },
-  goalLabel: { fontSize: 13, color: COLORS.subtext },
-  goalNumber: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  goalLabel: { 
+    fontSize: 13, 
+    //color: COLORS.subtext 
+  },
 
-  remaining: { fontSize: 22, fontWeight: '800', color: COLORS.text },
-  remainingLabel: { fontSize: 12, color: COLORS.subtext },
+  goalNumber: { 
+    fontSize: 16, 
+    fontWeight: '700', 
+    //color: COLORS.text 
+  },
+
+  remaining: { 
+    fontSize: 22, 
+    fontWeight: '800', 
+    //color: COLORS.text 
+  },
+  remainingLabel: { 
+    fontSize: 12, 
+    //color: COLORS.subtext 
+  },
   centerPlus: {
     width: 44,
     height: 44,
@@ -1040,8 +1223,17 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   mealLeft: { flexDirection: 'row', alignItems: 'center' },
-  mealTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  mealSub: { fontSize: 12, color: COLORS.subtext, marginTop: 2 },
+  mealTitle: { 
+    fontSize: 16, 
+    fontWeight: '700', 
+    //color: COLORS.text 
+  },
+
+  mealSub: { 
+    fontSize: 12, 
+    //color: COLORS.subtext, 
+    marginTop: 2 },
+
   addBtn: {
     width: 36,
     height: 36,
@@ -1073,8 +1265,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
   },
-  sheetCancel: { color: COLORS.subtext, fontSize: 16 },
-  sheetTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+
+  sheetCancel: { 
+    //color: COLORS.subtext, 
+    fontSize: 16 
+  },
+
+  sheetTitle: { 
+    fontSize: 16, 
+    fontWeight: '700', 
+    //color: COLORS.text 
+  },
   sheetSave: { color: COLORS.purple, fontSize: 16, fontWeight: '700' },
 
   segmentRow: {
@@ -1097,7 +1298,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.mutedBg,
     borderColor: COLORS.purpleLight,
   },
-  segmentText: { color: COLORS.text, fontWeight: '600' },
+  segmentText: { 
+    //color: COLORS.text, 
+    fontWeight: '600' 
+  },
   segmentTextActive: { color: COLORS.purple, fontWeight: '800' },
   clearBtn: {
     flexDirection: 'row',
@@ -1119,14 +1323,17 @@ const styles = StyleSheet.create({
   kcalInput: {
     fontSize: 44,
     fontWeight: '800',
-    color: COLORS.text,
+    //color: theme.text,
     minWidth: 120,
     textAlign: 'center',
     paddingVertical: 0,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  kcalUnit: { fontSize: 14, color: COLORS.subtext, marginTop: 6 },
+  kcalUnit: { 
+    fontSize: 14, 
+    //color: COLORS.subtext, 
+    marginTop: 6 },
 
   stepperBtn: {
     width: 48,
@@ -1138,7 +1345,7 @@ const styles = StyleSheet.create({
   stepperText: {
     fontSize: 28,
     fontWeight: '700',
-    color: COLORS.text,
+    //color: COLORS.text,
     marginTop: -2,
   },
 
@@ -1173,7 +1380,7 @@ const styles = StyleSheet.create({
   gramsInlineTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.text,
+    //color: COLORS.text,
     marginBottom: 6,
   },
   gramsInlineRow: {
@@ -1189,13 +1396,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     fontSize: 14,
-    color: COLORS.text,
+    //color: COLORS.text,
     backgroundColor: '#FFFFFF',
   },
   gramsInlineSuffix: {
     marginLeft: 8,
     fontSize: 14,
-    color: COLORS.subtext,
+    //color: COLORS.subtext,
     fontWeight: '600',
   },
   gramsInlineButtonsRow: {

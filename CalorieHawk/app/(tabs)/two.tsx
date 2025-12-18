@@ -87,7 +87,10 @@ export default function SettingScreen() {
 
       {/* --- Account --- */}
       <View style={styles.section}>
-        <TouchableOpacity style={styles.item}>
+        <TouchableOpacity
+          style={styles.item}
+          onPress={() => router.push("/profile/editProfile")}
+        >
           <Text style={[styles.text, { color: theme.text }]}>Edit Profile</Text>
         </TouchableOpacity>
 
