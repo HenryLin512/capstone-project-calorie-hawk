@@ -5,6 +5,7 @@
   * Go to the App Store (iPhone) or Play Store (Android)
   * Search for Expo Go
   * Download & install
+  * Don't need to create an account
 
 👉 Step 2 — Open Your Camera
   * Go to your camera on your phone (Make sure your camera can read QR code)
