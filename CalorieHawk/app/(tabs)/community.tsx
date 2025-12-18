@@ -40,6 +40,7 @@ import {
   arrayRemove,
   increment,
   DocumentData,
+  Timestamp,
 } from "firebase/firestore";
 import { db, storage } from "../../FireBaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -47,6 +48,7 @@ import { auth } from "../../FireBaseConfig";
 import { router } from "expo-router"; 
 import { Ionicons } from "@expo/vector-icons";
 import { Animated, Easing } from "react-native";
+import { useTheme } from "../../utils/ThemeContext";
 
 
 /* ----------------------
@@ -97,20 +99,25 @@ function timeAgo(date?: Date | null) {
 }
 
 /* ShortText component with read-more */
-const ShortText: React.FC<{ text: string; limit?: number }> = ({ text, limit = 180 }) => {
+const ShortText: React.FC<{ text: string; limit?: number; theme: any }> = ({
+  text,
+  limit = 180,
+  theme,
+}) => {
   const [expanded, setExpanded] = useState(false);
   const isLong = text.length > limit;
+
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={() => isLong && setExpanded((s) => !s)}>
-      <Text style={styles.desc}>
+    <TouchableOpacity activeOpacity={0.9} onPress={() => isLong && setExpanded(!expanded)}>
+      <Text style={[styles.desc, { color: theme.text }]}>
         {expanded || !isLong ? text : text.slice(0, limit) + "…"}
       </Text>
+
       {!expanded && isLong && <Text style={styles.readMore}>Read more</Text>}
       {expanded && isLong && <Text style={styles.readMore}>Read less</Text>}
     </TouchableOpacity>
   );
 };
-
 
 /* ----------------------
    Main Component
@@ -170,6 +177,8 @@ export default function CommunityTab() {
         }
     });
   };
+  //To use dark mode 
+  const { theme, mode } = useTheme();
 
   /* ----------------------
      Real-time posts listener
@@ -425,24 +434,26 @@ export default function CommunityTab() {
      Comments: view / add.
   ------------------------*/
   const submitComment = async (postId: string) => {
-    const text = (commentText[postId] || "").trim();
-    if (!text) return;
-    try {
-      const postRef = doc(db, "recipes", postId);
-      
-      await updateDoc(postRef, {
-        comments: arrayUnion({
-          uid: auth.currentUser!.uid,
-          text,
-          createdAt: serverTimestamp(),
-        }),
-      });
-      setCommentText((s) => ({ ...s, [postId]: "" }));
-      // real-time will refresh comment list
-    } catch (e) {
-      console.error("comment error", e);
-    }
-  };
+  const text = (commentText[postId] || "").trim();
+  if (!text) return;
+
+  try {
+    const postRef = doc(db, "recipes", postId);
+
+    await updateDoc(postRef, {
+      comments: arrayUnion({
+        uid: auth.currentUser!.uid,
+        text,
+        createdAt: Timestamp.now(), // ✅ FIX
+      }),
+    });
+
+    setCommentText((s) => ({ ...s, [postId]: "" }));
+  } catch (e) {
+    console.error("comment error", e);
+    Alert.alert("Error", "Failed to post comment");
+  }
+};
 
   /* ----------------------
      Helpers for profile lookup display
@@ -505,10 +516,11 @@ export default function CommunityTab() {
   
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <FlatList
         data={posts}
         keyExtractor={(it) => it.id}
+        keyboardShouldPersistTaps="handled"
         onScrollBeginDrag={() => setShowAddButton(false)}
         onScrollEndDrag={() => setShowAddButton(true)}
         renderItem={({ item }) => {
@@ -519,7 +531,7 @@ export default function CommunityTab() {
           const likedByViewer = Array.isArray(item.likedBy) && item.likedBy.includes("local-demo-user");
           
           return (
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
               {/* header: profile pic + name + time */}
               
               <View style={styles.headerRow}>
@@ -536,8 +548,10 @@ export default function CommunityTab() {
                   )}
                   </TouchableOpacity>
                   <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.displayName}>{profile.displayName}</Text>
-                    <Text style={styles.timeText}>
+                    <Text style={[styles.displayName, { color: theme.text }]}>
+                      {profile.displayName}
+                    </Text>
+                    <Text style={[styles.timeText, { color: theme.text }]}>
                       {postTime}
                       {item.editedAt && " · Edited"}
                     </Text>
@@ -577,28 +591,31 @@ export default function CommunityTab() {
                 </TouchableWithoutFeedback>
               )}
 
-              <Text style={styles.postTitle}>{item.title}</Text>
+              <Text style={[styles.postTitle, { color: theme.text }]}>{item.title}</Text>
 
               {item.imageUrl ? (
                 <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
               ) : null}
 
-              <ShortText text={item.description} />
+              <ShortText text={item.description} theme={theme} />
 
               {typeof item.calories === "number" && item.calories > 0 && (
-                <Text style={styles.calories}>{item.calories} kcal</Text>
+                <Text style={[styles.calories, { color: theme.tint }]}>{item.calories} kcal</Text>
               )}
 
               {/* action bar */}
               <View style={styles.actions}>
-                <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item)}>
-                  <Text style={[styles.actionText, likedByViewer && { color: "#e0245e" }]}>
+                <TouchableOpacity 
+                style={[styles.actionBtn, { backgroundColor: theme.card }]} 
+                onPress={() => toggleLike(item)}
+                >
+                  <Text style={[styles.actionText,  likedByViewer && { color: "#e0245e" }]}>
                     {likedByViewer ? "❤️" : "🤍"} {item.likes ?? 0}
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.actionBtn}
+                  style={[styles.actionBtn, { backgroundColor: theme.card }]}
                   onPress={() =>
                     setExpandedComments((s) => ({ ...s, [item.id]: !s[item.id] }))
                   }
@@ -699,10 +716,22 @@ export default function CommunityTab() {
       {/* Floating Add Button */}
       {showAddButton && (
         <TouchableOpacity
-          style={styles.addButton}
+          style={[
+            styles.addButton,
+            {
+              backgroundColor: mode === "light" ? "#FFD646" : "#9D00FF",
+            },
+          ]}
           onPress={() => setModalVisible(true)}
         >
-          <Text style={styles.addButtonText}>＋</Text>
+          <Text
+            style={[
+              styles.addButtonText,
+              { color: mode === "light" ? "#5B21B6" : theme.card },
+            ]}
+          >
+            ＋
+          </Text>
         </TouchableOpacity>
       )}
 
@@ -716,9 +745,9 @@ export default function CommunityTab() {
           >
             <Animated.View
               style={[
-                styles.modalContainer,
-                {
-                  transform: [
+                styles.modalContainer, 
+                { backgroundColor: theme.card },
+                { transform: [
                     {
                       translateY: slideAnim.interpolate({
                         inputRange: [0, 1],
@@ -734,12 +763,12 @@ export default function CommunityTab() {
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{ paddingBottom: 40 }}
               >
-                <Text style={styles.modalTitle}>Create a Post</Text>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Create a Post</Text>
 
                 <TextInput
                   placeholder="Title (required)"
                   placeholderTextColor="#888"
-                  style={styles.input}
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
                   value={title}
                   onChangeText={setTitle}
                 />
@@ -747,7 +776,7 @@ export default function CommunityTab() {
                 <TextInput
                   placeholder="Description (optional)"
                   placeholderTextColor="#888"
-                  style={[styles.input, { height: 100 }]}
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }, { height: 100 }]}
                   value={description}
                   onChangeText={setDescription}
                   multiline
@@ -756,14 +785,22 @@ export default function CommunityTab() {
                 <TextInput
                   placeholder="Calories (optional)"
                   placeholderTextColor="#888"
-                  style={styles.input}
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
                   keyboardType="numeric"
                   value={calories}
                   onChangeText={setCalories}
                 />
 
-                <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-                  <Text>{imageUri ? "Change Image" : "Pick Image"}</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.imagePicker,
+                    { borderColor: theme.tint }
+                  ]}
+                  onPress={pickImage}
+                >
+                  <Text style={{ color: theme.text }}>
+                    {imageUri ? "Change Image" : "Pick Image"}
+                  </Text>
                 </TouchableOpacity>
 
                 {imageUri && (
@@ -816,6 +853,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  
 
   headerRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#ddd" },
