@@ -37,12 +37,14 @@ git clone <our repository URL> in your VS Code and download Expo Go on your phon
      ==> So use the terminal that you used to installed Node.js on.
 
 👉 Step 3 — Install Firebase
+   * In the same folder, CalorieHawk type the command below:
                       
                       npm install firebase
 
 ⚠️ Caution: If after installing all dependencies and VS Code still displays red errors. Closing your VS Code and reopening it again will clear out all the red errors.
 
 👉 Step 4 — Start the App
+  * In the same folder, CalorieHawk, type the command below
                       
                       npx expo start
                       
