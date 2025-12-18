@@ -22,8 +22,8 @@ Note: To log in, just click on Sign Up, and create an email with @gmail.com and 
 
 Option 2 — 💻 Run Locally from Code (For Full Testing)
 
-👉 Step 1 — Clone the Repository
-git clone <our repository URL> in your VS Code and download Expo Go on your phone.
+👉 Step 1 — Clone the Repository 
+git clone <our repository URL> in your VS Code and download Expo Go on your phone, and make sure Node.js is installed on your computer in order to test the app locally.
 
 👉 Step 2 — Install Dependencies
 
@@ -32,6 +32,9 @@ git clone <our repository URL> in your VS Code and download Expo Go on your phon
 * Then you will see a lot of red errors popping off because of  missing dependencies. Then type in the terminal the command below: 
 
                       npm install
+
+⚠️ Caution: if the terminal (Powershell) said "didn't find npm," means Node.js may not be installed or installed on a different command prompt from Powershell.
+     ==> So use the terminal that you used to installed Node.js on.
 
 👉 Step 3 — Install Firebase
                       
