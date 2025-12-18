@@ -409,8 +409,15 @@ export default function CommunityTab() {
   
   const toggleLike = async (post: RecipeDoc) => {
     try {
+      const user = auth.currentUser;
+      if (!user) {
+        // Show login prompt if user is not authenticated
+        Alert.alert("Login Required", "Please login to like posts.");
+        return;
+      }
+
       const postRef = doc(db, "recipes", post.id);
-      const viewerId = "local-demo-user"; // temporary placeholder — change to uid when you add auth
+      const viewerId = user.uid; //New user will have new View
 
       const already = Array.isArray(post.likedBy) && post.likedBy.includes(viewerId);
       if (already) {
@@ -418,6 +425,7 @@ export default function CommunityTab() {
           likedBy: arrayRemove(viewerId),
           likes: increment(-1),
         });
+
       } else {
         await updateDoc(postRef, {
           likedBy: arrayUnion(viewerId),
@@ -528,7 +536,7 @@ export default function CommunityTab() {
           const postTime = item.createdAt ? timeAgo(item.createdAt as Date) : "";
           const isOwner = auth.currentUser?.uid === item.authorId;
           const commentCount = Array.isArray(item.comments) ? item.comments.length : 0;
-          const likedByViewer = Array.isArray(item.likedBy) && item.likedBy.includes("local-demo-user");
+          const likedByViewer = Array.isArray(item.likedBy) &&  auth.currentUser && item.likedBy.includes(auth.currentUser.uid);
           
           return (
             <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -656,8 +664,7 @@ export default function CommunityTab() {
                                 style={styles.commentAvatar}
                               />
                             ) : (
-                              // <View style={styles.commentAvatarPlaceholder}>
-                              //   <Text style={styles.commentAvatarInitial}>
+                              
                               <View style={[styles.commentAvatarPlaceholder, 
                                 { backgroundColor: theme.border || "#ddd" }]}>
                                 <Text style={[styles.commentAvatarInitial, 
