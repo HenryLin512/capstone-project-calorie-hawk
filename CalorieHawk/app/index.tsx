@@ -8,6 +8,10 @@ import {
   Alert,
   Modal,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import {
   createUserWithEmailAndPassword,
@@ -17,6 +21,7 @@ import {
 import { auth } from "../FireBaseConfig";
 import { router } from "expo-router";
 import { useTheme } from "../utils/ThemeContext"; // ✅ Global theme context
+import { createUserProfile } from "../utils/createUserProfile"; //Create a user profile for new user
 
 
 
@@ -31,6 +36,21 @@ export default function Login() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
 
+
+  // --- Password validation ---
+    const validatePassword = (password: string) => {
+      const errors = [];
+
+      if (password.length < 8 || password.length > 16)
+        errors.push("Password must be 8–16 characters long.");
+      if (!/[A-Z]/.test(password)) errors.push("At least one uppercase letter required.");
+      if (!/[a-z]/.test(password)) errors.push("At least one lowercase letter required.");
+      if (!/[0-9]/.test(password)) errors.push("At least one number required.");
+      if (!/[!@#$%^&*(),.?\":{}|<>]/.test(password))
+        errors.push("At least one special symbol required (!@#$...).");
+
+      return errors;
+    };
 
   // --- Login
   const handleLogin = async () => {
@@ -58,6 +78,12 @@ export default function Login() {
 
   // --- Sign Up
   const handleSignUp = async (signupEmail: string, signupPassword: string) => {
+    const validationErrors = validatePassword(signupPassword);
+    if (validationErrors.length > 0) {
+      Alert.alert("Weak password", validationErrors.join("\n"));
+      return;
+    }
+
     try {
       const user = await createUserWithEmailAndPassword(
         auth,
@@ -65,6 +91,8 @@ export default function Login() {
         signupPassword
       );
       if (user) {
+
+        await createUserProfile(user.user); // create Firestore user profile
         Alert.alert("Success", "Account created!");
         setSignUpVisible(false);
         router.replace("/(tabs)/one");
@@ -84,7 +112,6 @@ export default function Login() {
   // --- UI ---
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Global Dark/Light Toggle */}
       <Pressable
         onPress={toggleTheme}
         style={{ alignSelf: "center", marginBottom: 20 }}
@@ -96,7 +123,6 @@ export default function Login() {
 
       <Text style={[styles.title, { color: theme.text }]}>CalorieHawk</Text>
 
-      {/* --- Login form --- */}
       <TextInput
         style={[
           styles.input,
@@ -145,83 +171,117 @@ export default function Login() {
 
       <View style={styles.divider} />
 
-
       <Pressable onPress={() => setSignUpVisible(true)}>
         <Text style={[styles.link, { color: theme.tint }]}>
-          Don’t have an account? Sign up
+          Don't have an account? Sign up
         </Text>
       </Pressable>
 
-      {/* --- Sign Up Modal --- */}
       <Modal
         animationType="slide"
         transparent
         visible={signUpVisible}
         onRequestClose={() => setSignUpVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: theme.inputBackground },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Create Account
-            </Text>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalBackdrop}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={[
+              styles.modalCard, 
+              { 
+                backgroundColor: theme.inputBackground,
+                marginTop: 50,
+              }
+            ]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                Create Account
+              </Text>
 
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.background,
-                  color: theme.text,
-                  borderColor: mode === "dark" ? "#333" : "#ccc",
-                },
-              ]}
-              placeholder="Email"
-              placeholderTextColor={mode === "dark" ? "#aaa" : "#666"}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={signupEmail}
-              onChangeText={setSignupEmail}
-            />
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.background,
-                  color: theme.text,
-                  borderColor: mode === "dark" ? "#333" : "#ccc",
-                },
-              ]}
-              placeholder="Password"
-              placeholderTextColor={mode === "dark" ? "#aaa" : "#666"}
-              secureTextEntry
-              value={signupPassword}
-              onChangeText={setSignupPassword}
-            />
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.background,
+                    color: theme.text,
+                    borderColor: mode === "dark" ? "#333" : "#ccc",
+                  },
+                ]}
+                placeholder="Email"
+                placeholderTextColor={mode === "dark" ? "#aaa" : "#666"}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={signupEmail}
+                onChangeText={setSignupEmail}
+              />
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.background,
+                    color: theme.text,
+                    borderColor: mode === "dark" ? "#333" : "#ccc",
+                  },
+                ]}
+                placeholder="Password"
+                placeholderTextColor={mode === "dark" ? "#aaa" : "#666"}
+                secureTextEntry
+                value={signupPassword}
+                onChangeText={setSignupPassword}
+              />
 
-            <Pressable
-              style={[styles.button, { backgroundColor: theme.button }]}
-              onPress={() => handleSignUp(signupEmail, signupPassword)}
-            >
-              <Text style={styles.buttonText}>Sign Up</Text>
-            </Pressable>
+              <View style={{ marginVertical: 8 }}>
+                <Text style={{ fontWeight: "600", color: theme.text }}>
+                  Password must include:
+                </Text>
+                {[
+                  { label: "8–16 characters", valid: signupPassword.length >= 8 && signupPassword.length <= 16 },
+                  { label: "At least 1 uppercase letter", valid: /[A-Z]/.test(signupPassword) },
+                  { label: "At least 1 lowercase letter", valid: /[a-z]/.test(signupPassword) },
+                  { label: "At least 1 number", valid: /[0-9]/.test(signupPassword) },
+                  { label: "At least 1 symbol (!@#$%)", valid: /[!@#$%^&*(),.?\":{}|<>]/.test(signupPassword) },
+                ].map((rule, index) => (
+                  <View key={index} style={{ flexDirection: "row", alignItems: "center", marginVertical: 2 }}>
+                    <Text style={{ color: rule.valid ? "green" : mode === "dark" ? "#aaa" : "#666" }}>
+                      {rule.valid ? "✅" : "•"} {rule.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
 
-            <Pressable onPress={() => setSignUpVisible(false)}>
-              <Text style={[styles.link, { color: theme.tint }]}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
+              <View style={{ height: 30 }} />
+
+              <Pressable
+                style={[styles.button, { backgroundColor: theme.button }]}
+                onPress={() => handleSignUp(signupEmail, signupPassword)}
+              >
+                <Text style={styles.buttonText}>Sign Up</Text>
+              </Pressable>
+
+              <Pressable 
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setSignUpVisible(false);
+                }}
+                style={{ marginTop: 16 }}
+              >
+                <Text style={[styles.link, { color: theme.tint }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 20 },
+  container: { 
+    flex: 1, 
+    justifyContent: "center", 
+    padding: 20 
+  },
   title: {
     fontSize: 32,
     fontWeight: "bold",
@@ -234,39 +294,38 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
-  button: { padding: 14, borderRadius: 8, marginTop: 10 },
-  buttonText: { color: "#fff", fontWeight: "600", textAlign: "center" },
-  link: { textAlign: "center", marginTop: 16 },
+  button: { 
+    padding: 14, 
+    borderRadius: 8, 
+    marginTop: 10 
+  },
+  buttonText: { 
+    color: "#fff", 
+    fontWeight: "600", 
+    textAlign: "center" 
+  },
+  link: { 
+    textAlign: "center", 
+    marginTop: 16 
+  },
   modalBackdrop: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-start",
     alignItems: "center",
     backgroundColor: "rgba(0,0,0,0.4)",
   },
-  modalCard: { width: "85%", padding: 20, borderRadius: 12 },
+  modalCard: { 
+    width: "85%", 
+    padding: 20, 
+    borderRadius: 12,
+    marginTop: 50,
+  },
   modalTitle: {
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 16,
     textAlign: "center",
   },
-  googleButton: {
-    backgroundColor: "#fff",
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginTop: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  googleContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  googleIcon: { width: 20, height: 20, marginRight: 10 },
-  googleText: { color: "#000", fontWeight: "600", fontSize: 15 },
   divider: {
     height: 1,
     backgroundColor: "#ccc",

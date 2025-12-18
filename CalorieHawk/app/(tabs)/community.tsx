@@ -643,7 +643,7 @@ export default function CommunityTab() {
                     style={styles.commentsSection}
                   >
                     {commentCount === 0 ? (
-                      <Text style={styles.noComments}>No comments yet — be the first!</Text>
+                      <Text style={[styles.noComments, { color: theme.text }]}>No comments yet — be the first!</Text>
                     ) : (
                       (item.comments || []).map((c, idx) => {
                         const commenterProfile = profiles[c.uid];
@@ -656,8 +656,12 @@ export default function CommunityTab() {
                                 style={styles.commentAvatar}
                               />
                             ) : (
-                              <View style={styles.commentAvatarPlaceholder}>
-                                <Text style={styles.commentAvatarInitial}>
+                              // <View style={styles.commentAvatarPlaceholder}>
+                              //   <Text style={styles.commentAvatarInitial}>
+                              <View style={[styles.commentAvatarPlaceholder, 
+                                { backgroundColor: theme.border || "#ddd" }]}>
+                                <Text style={[styles.commentAvatarInitial, 
+                                  { color: theme.text || "#444" }]}>
                                   {(commenterProfile?.displayName || "U")
                                     .charAt(0)
                                     .toUpperCase()}
@@ -666,10 +670,10 @@ export default function CommunityTab() {
                             )}
 
                             <View style={{ flex: 1 }}>
-                              <Text style={styles.commentAuthor}>
+                              <Text style={[styles.commentAuthor, { color: theme.text }]}>
                                 {commenterProfile?.displayName || "Unknown"}
                               </Text>
-                              <Text>{c.text}</Text>
+                              <Text style={{ color: theme.text }}>{c.text}</Text>
                             </View>
                           </View>
                         );
@@ -681,6 +685,7 @@ export default function CommunityTab() {
                   <View style={styles.addCommentRow}>
                     <TextInput
                       placeholder="Write a comment..."
+                      placeholderTextColor={theme.text + "80"} // 50% opacity
                       value={commentText[item.id] ?? ""}
                       onChangeText={(t) => {
                         setCommentText((s) => ({ ...s, [item.id]: t }));
@@ -688,13 +693,20 @@ export default function CommunityTab() {
                           scrollRef.current?.scrollToEnd({ animated: true });
                         }, 50);
                       }}
-                      style={styles.commentInput}
+                      style={[
+                        styles.commentInput,
+                        { 
+                          borderColor: theme.border, 
+                          backgroundColor: theme.background,
+                          color: theme.text 
+                        }
+                      ]}
                       multiline
                     />
 
                     <TouchableOpacity
-                      style={styles.commentPostBtn}
-                      onPress={() => submitComment(item.id)}
+                      style={[styles.commentPostBtn, 
+                        { backgroundColor: theme.tint || "#007AFF" }]}
                     >
                       <Text style={{ color: "#fff", fontWeight: "600" }}>Post</Text>
                     </TouchableOpacity>
@@ -705,7 +717,7 @@ export default function CommunityTab() {
                   onPress={() => setExpandedComments((s) => ({ ...s, [item.id]: true }))}
                   style={{ paddingTop: 8 }}
                 >
-                  <Text style={styles.viewComments}>View comments ({commentCount})</Text>
+                  <Text style={[styles.viewComments, { color: theme.tint }]}>View comments ({commentCount})</Text>
                 </TouchableOpacity>
               )}
             </View>

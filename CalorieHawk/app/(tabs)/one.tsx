@@ -48,7 +48,6 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-
 // Utils
 import { pickUploadAndSaveMeta } from '../../utils/imageUploader';
 import { scanFood } from '../../utils/foodRecognition';
@@ -106,10 +105,10 @@ const BUILT_INS: MealLabel[] = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Other
 
 const initialMeals: Meal[] = [
   { label: 'Breakfast', target: 0, entries: [] },
-  { label: 'Lunch',     target: 0, entries: [] },
-  { label: 'Dinner',    target: 0, entries: [] },
-  { label: 'Snacks',    target: 0, entries: [] },
-  { label: 'Other',     target: 0, entries: [] },
+  { label: 'Lunch', target: 0, entries: [] },
+  { label: 'Dinner', target: 0, entries: [] },
+  { label: 'Snacks', target: 0, entries: [] },
+  { label: 'Other', target: 0, entries: [] },
 ];
 
 const KCAL_STEP = 50;
@@ -139,6 +138,9 @@ export default function Dashboard() {
   // macro estimate (sheet)
   const [macroBusy, setMacroBusy] = useState(false);
   const [macroSnapshot, setMacroSnapshot] = useState<MacroSnap | null>(null);
+
+  // ✅ NEW: only lock kcal if user changes it AFTER an estimate exists
+  const [kcalOverrideAfterEstimate, setKcalOverrideAfterEstimate] = useState(false);
 
   // per-meal pending preview of estimated macros (not yet saved)
   const [pendingByMeal, setPendingByMeal] =
@@ -191,9 +193,9 @@ export default function Dashboard() {
   );
 
   // distribute the dailyGoal into macro gram goals (50/25/25)
-  const carbsGoal   = dailyGoal > 0 ? (dailyGoal * 0.50) / 4 : 0;
+  const carbsGoal = dailyGoal > 0 ? (dailyGoal * 0.5) / 4 : 0;
   const proteinGoal = dailyGoal > 0 ? (dailyGoal * 0.25) / 4 : 0;
-  const fatGoal     = dailyGoal > 0 ? (dailyGoal * 0.25) / 9 : 0;
+  const fatGoal = dailyGoal > 0 ? (dailyGoal * 0.25) / 9 : 0;
 
   // Goal listener
   useEffect(() => {
@@ -330,6 +332,7 @@ export default function Dashboard() {
     setPhotoUri(undefined);
     setSuggestedFoodName(undefined);
     setMacroSnapshot(null);
+    setKcalOverrideAfterEstimate(false); // ✅ reset
     setBusy(false);
     setPct(0);
     setMacroBusy(false);
@@ -346,12 +349,21 @@ export default function Dashboard() {
       return next;
     });
     setMacroSnapshot(null);
+    setKcalOverrideAfterEstimate(false); // ✅ reset
     setShowGramsRow(false);
     setModalVisible(false);
   };
 
+  // ✅ Updated: only “locks” kcal if edited AFTER we already have an estimate
   const setKcalFromText = (t: string) => {
-    if (/^\d{0,6}$/.test(t) || t === '') setEntryKcal(t);
+    if (/^\d{0,6}$/.test(t) || t === '') {
+      setEntryKcal(t);
+
+      if (macroSnapshot) {
+        // if they clear it, allow autofill again
+        setKcalOverrideAfterEstimate(t !== '');
+      }
+    }
   };
 
   const signedValue = () => {
@@ -359,14 +371,21 @@ export default function Dashboard() {
     return (mode === 'sub' ? -1 : 1) * base;
   };
 
+  // ✅ Updated: stepper only locks kcal if used AFTER estimate exists
   const adjustKcal = (delta: number) => {
     const next = signedValue() + delta;
     const nextMode: 'add' | 'sub' = next < 0 ? 'sub' : 'add';
     setMode(nextMode);
     setEntryKcal(String(Math.max(0, Math.abs(next))));
+
+    //if (macroSnapshot) setKcalOverrideAfterEstimate(true);
   };
 
-  const clearKcal = () => setEntryKcal('');
+  // ✅ Updated: clear unlocks autofill
+  const clearKcal = () => {
+    setEntryKcal('');
+    setKcalOverrideAfterEstimate(false);
+  };
 
   const handleAddPhotoNative = async () => {
     try {
@@ -413,8 +432,7 @@ export default function Dashboard() {
         task.on(
           'state_changed',
           (snap) => {
-            if (snap.totalBytes > 0)
-              setPct(snap.bytesTransferred / snap.totalBytes);
+            if (snap.totalBytes > 0) setPct(snap.bytesTransferred / snap.totalBytes);
           },
           (err) => reject(err),
           async () => resolve(await getDownloadURL(task.snapshot.ref))
@@ -446,9 +464,7 @@ export default function Dashboard() {
       Alert.alert('No food name', 'Add a photo or type a name first.');
       return;
     }
-    setGramsInput((prev) =>
-      prev && Number(prev) > 0 ? prev : ESTIMATE_PORTION_GRAMS.toString()
-    );
+    setGramsInput((prev) => (prev && Number(prev) > 0 ? prev : ESTIMATE_PORTION_GRAMS.toString()));
     setShowGramsRow(true);
   };
 
@@ -480,15 +496,10 @@ export default function Dashboard() {
 
       setMacroSnapshot(snap);
 
-      // auto-fill kcal from estimated macros if user hasn't overridden yet
-      if (snap.kcal != null) {
+      // ✅ Updated: auto-fill kcal unless user overrode AFTER an estimate existed
+      if (snap.kcal != null && !kcalOverrideAfterEstimate) {
         const estKcal = Math.round(Math.abs(snap.kcal));
-        setEntryKcal((prev) => {
-          if (!prev || prev === '500') {
-            return String(estKcal);
-          }
-          return prev;
-        });
+        setEntryKcal(String(estKcal));
       }
 
       // preview on meal card
@@ -496,11 +507,9 @@ export default function Dashboard() {
 
       Alert.alert(
         'Estimated macros',
-        `For ~${grams} g\n\nkcal: ${snap.kcal ?? '—'}\nProtein: ${
-          snap.protein_g ?? '—'
-        } g\nFat: ${snap.fat_g ?? '—'} g\nCarbs: ${
-          snap.carbs_g ?? '—'
-        } g`
+        `For ~${grams} g\n\nkcal: ${snap.kcal ?? '—'}\nProtein: ${snap.protein_g ?? '—'} g\nFat: ${
+          snap.fat_g ?? '—'
+        } g\nCarbs: ${snap.carbs_g ?? '—'} g`
       );
     } catch (e: any) {
       console.log('macro fetch error', e?.message || e);
@@ -563,9 +572,7 @@ export default function Dashboard() {
     if (macrosForDb) entryForDb.macros = macrosForDb;
 
     setMeals((prev) =>
-      prev.map((m) =>
-        m.label === activeMeal ? { ...m, entries: [optimistic, ...m.entries] } : m
-      )
+      prev.map((m) => (m.label === activeMeal ? { ...m, entries: [optimistic, ...m.entries] } : m))
     );
 
     // clear pending preview & close sheet
@@ -575,6 +582,7 @@ export default function Dashboard() {
       return next;
     });
     setMacroSnapshot(null);
+    setKcalOverrideAfterEstimate(false); // ✅ reset for next time
     setShowGramsRow(false);
     setModalVisible(false);
 
@@ -602,10 +610,7 @@ export default function Dashboard() {
       // Notifications
       try {
         await notifyEntrySaved(activeMeal, val, suggestedFoodName, macrosForDb);
-        const newRemaining = Math.max(
-          0,
-          dailyGoal > 0 ? dailyGoal - (eatenCalories + val) : 0
-        );
+        const newRemaining = Math.max(0, dailyGoal > 0 ? dailyGoal - (eatenCalories + val) : 0);
         await scheduleFollowUpReminder(newRemaining);
       } catch (e) {
         console.log('Notification scheduling error:', e);
@@ -686,9 +691,7 @@ export default function Dashboard() {
                   <View style={styles.centerPlus}>
                     <Ionicons name="add" size={24} color="#fff" />
                   </View>
-                  <Text style={[styles.remainingLabel, { marginTop: 6 }]}>
-                    Set goal
-                  </Text>
+                  <Text style={[styles.remainingLabel, { marginTop: 6 }]}>Set goal</Text>
                 </>
               )}
             </Pressable>
@@ -719,24 +722,9 @@ export default function Dashboard() {
       {/* Daily macro pebbles (now use REAL totals) */}
       <View style={{ paddingHorizontal: 16, marginTop: -4, marginBottom: 8 }}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <MacroPebble
-            label="Carbs"
-            value={dailyMacros.carbs_g}
-            goal={carbsGoal}
-            fill="#60A5FA"
-          />
-          <MacroPebble
-            label="Protein"
-            value={dailyMacros.protein_g}
-            goal={proteinGoal}
-            fill="#22C55E"
-          />
-          <MacroPebble
-            label="Fat"
-            value={dailyMacros.fat_g}
-            goal={fatGoal}
-            fill="#F59E0B"
-          />
+          <MacroPebble label="Carbs" value={dailyMacros.carbs_g} goal={carbsGoal} fill="#60A5FA" />
+          <MacroPebble label="Protein" value={dailyMacros.protein_g} goal={proteinGoal} fill="#22C55E" />
+          <MacroPebble label="Fat" value={dailyMacros.fat_g} goal={fatGoal} fill="#F59E0B" />
         </View>
       </View>
 
@@ -751,19 +739,16 @@ export default function Dashboard() {
         keyExtractor={(m, i) => `${m.label}-${i}`}
         renderItem={({ item }) => {
           const consumed = item.entries.reduce((a, e) => a + e.kcal, 0);
-          const pct = Math.min(
-            1,
-            item.target ? Math.max(consumed, 0) / item.target : 0
-          );
+          const pct = Math.min(1, item.target ? Math.max(consumed, 0) / item.target : 0);
 
           // live totals from saved entries
           const liveTotals = sumEntriesMacros(item.entries as any);
           // add pending preview (if any)
           const pending = pendingByMeal[item.label];
           const display = {
-            carbs_g:   (liveTotals.carbs_g   ?? 0) + (pending?.carbs_g   ?? 0),
+            carbs_g: (liveTotals.carbs_g ?? 0) + (pending?.carbs_g ?? 0),
             protein_g: (liveTotals.protein_g ?? 0) + (pending?.protein_g ?? 0),
-            fat_g:     (liveTotals.fat_g     ?? 0) + (pending?.fat_g     ?? 0),
+            fat_g: (liveTotals.fat_g ?? 0) + (pending?.fat_g ?? 0),
           };
           const goals = perMealGoals(item.target || 0);
 
@@ -814,10 +799,7 @@ export default function Dashboard() {
                 </View>
               </View>
 
-              <Pressable
-                style={styles.addBtn}
-                onPress={() => openAdd(item.label)}
-              >
+              <Pressable style={styles.addBtn} onPress={() => openAdd(item.label)}>
                 <Text style={styles.addBtnPlus}>＋</Text>
               </Pressable>
             </View>
@@ -826,12 +808,7 @@ export default function Dashboard() {
       />
 
       {/* Add entry bottom sheet */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={cancelSheet}
-      >
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={cancelSheet}>
         <KeyboardAvoidingView
           style={styles.modalBackdrop}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -939,9 +916,7 @@ export default function Dashboard() {
                     onChangeText={setKcalFromText}
                     placeholder="0"
                     inputMode="numeric"
-                    keyboardType={
-                      Platform.OS === 'ios' ? 'number-pad' : 'numeric'
-                    }
+                    keyboardType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
                     returnKeyType="done"
                     maxLength={6}
                     onSubmitEditing={Keyboard.dismiss}
@@ -1008,21 +983,14 @@ export default function Dashboard() {
                 </Pressable>
 
                 {busy && (
-                  <View
-                    style={{ flexDirection: 'row', alignItems: 'center' }}
-                  >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <ActivityIndicator />
-                    <Text style={{ marginLeft: 8 }}>
-                      {Math.round(pct * 100)}%
-                    </Text>
+                    <Text style={{ marginLeft: 8 }}>{Math.round(pct * 100)}%</Text>
                   </View>
                 )}
 
                 {photoUri ? (
-                  <Image
-                    source={{ uri: photoUri }}
-                    style={{ width: 48, height: 48, borderRadius: 8 }}
-                  />
+                  <Image source={{ uri: photoUri }} style={{ width: 48, height: 48, borderRadius: 8 }} />
                 ) : null}
               </View>
 
@@ -1047,30 +1015,13 @@ export default function Dashboard() {
                       style={[styles.gramsInlineBtn, { backgroundColor: '#E5E7EB' }]}
                       onPress={() => setShowGramsRow(false)}
                     >
-                      <Text
-                        style={[
-                          styles.gramsInlineBtnText,
-                          { color: '#111827' },
-                        ]}
-                      >
-                        Cancel
-                      </Text>
+                      <Text style={[styles.gramsInlineBtnText, { color: '#111827' }]}>Cancel</Text>
                     </Pressable>
                     <Pressable
-                      style={[
-                        styles.gramsInlineBtn,
-                        { backgroundColor: COLORS.purple },
-                      ]}
+                      style={[styles.gramsInlineBtn, { backgroundColor: COLORS.purple }]}
                       onPress={onConfirmGrams}
                     >
-                      <Text
-                        style={[
-                          styles.gramsInlineBtnText,
-                          { color: '#FFFFFF' },
-                        ]}
-                      >
-                        Use
-                      </Text>
+                      <Text style={[styles.gramsInlineBtnText, { color: '#FFFFFF' }]}>Use</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -1166,9 +1117,9 @@ function MiniMacroBars({
 
   return (
     <View>
-      <Row label="Carbs"   value={carbs   || 0} goal={goals.carbs_g} />
+      <Row label="Carbs" value={carbs || 0} goal={goals.carbs_g} />
       <Row label="Protein" value={protein || 0} goal={goals.protein_g} />
-      <Row label="Fat"     value={fat     || 0} goal={goals.fat_g} />
+      <Row label="Fat" value={fat || 0} goal={goals.fat_g} />
     </View>
   );
 }
@@ -1469,3 +1420,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
