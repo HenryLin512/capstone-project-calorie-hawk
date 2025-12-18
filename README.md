@@ -1,5 +1,5 @@
 # 📘 Instruction for How to Use Our Calorie Hawk app:
-Option 1 — 📱 Run with Expo Go (Easiest & Recommended)
+**Option 1** — 📱 Run with Expo Go (Easiest & Recommended)
 
 👉 Step 1 — Install Expo Go
   * Go to the App Store (iPhone) or Play Store (Android)
@@ -20,7 +20,7 @@ https://expo.dev/preview/update?message=Complete+Build+v3&updateRuntimeVersion=1
   * Tap on "Open in Expo Go", then wait for the app to load, and you are good to go and try our app!
 Note: To log in, just click on Sign Up, and create an email with @gmail.com and your password of choice.
 
-Option 2 — 💻 Run Locally from Code (For Full Testing)
+**Option 2** — 💻 Run Locally from Code (For Full Testing)
 
 👉 Step 1 — Clone the Repository 
 git clone <our repository URL> in your VS Code and download Expo Go on your phone, and make sure Node.js is installed on your computer in order to test the app locally.
