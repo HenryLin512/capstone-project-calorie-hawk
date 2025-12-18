@@ -8,6 +8,10 @@ import {
   Modal,
   TextInput,
   Alert,
+  Keyboard,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import {
   onAuthStateChanged,
@@ -49,13 +53,35 @@ export default function SettingScreen() {
     setThemeMode(value ? "dark" : "light");
   };
 
+  // Password validation function
+  const validatePassword = (password: string) => {
+    const errors = [];
+
+    if (password.length < 8 || password.length > 16)
+      errors.push("Password must be 8–16 characters long.");
+    if (!/[A-Z]/.test(password)) errors.push("At least one uppercase letter required.");
+    if (!/[a-z]/.test(password)) errors.push("At least one lowercase letter required.");
+    if (!/[0-9]/.test(password)) errors.push("At least one number required.");
+    if (!/[!@#$%^&*(),.?\":{}|<>]/.test(password))
+      errors.push("At least one special symbol required (!@#$...).");
+
+    return errors;
+  };
+
   // 🔑 Cambiar contraseña con reautenticación
   const handleChangePassword = async () => {
     const user = auth.currentUser;
     if (!user) return Alert.alert("Error", "No user logged in");
 
-    if (newPassword.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
+    // Validate new password
+    const validationErrors = validatePassword(newPassword);
+    if (validationErrors.length > 0) {
+      Alert.alert("Weak password", validationErrors.join("\n"));
+      return;
+    }
+
+    if (!currentPassword) {
+      Alert.alert("Error", "Please enter your current password.");
       return;
     }
 
@@ -75,128 +101,177 @@ export default function SettingScreen() {
     } catch (error: any) {
       if (error.code === "auth/wrong-password") {
         Alert.alert("Error", "The current password you entered is incorrect.");
+      } else if (error.code === "auth/weak-password") {
+        Alert.alert("Weak password", "The new password is not strong enough.");
       } else {
         Alert.alert("Error", error.message);
       }
     }
   };
 
+  // Close keyboard when tapping outside
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Text style={[styles.title, { color: theme.text }]}>Settings</Text>
+    <TouchableWithoutFeedback onPress={dismissKeyboard} accessible={false}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Text style={[styles.title, { color: theme.text }]}>Settings</Text>
 
-      {/* --- Account --- */}
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.item}
-          onPress={() => router.push("/profile/editProfile")}
-        >
-          <Text style={[styles.text, { color: theme.text }]}>Edit Profile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.item}
-          onPress={() => setShowPasswordModal(true)}
-        >
-          <Text style={[styles.text, { color: theme.text }]}>
-            Change Password
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* --- Preferences --- */}
-      <View style={styles.section}>
-        <View style={styles.row}>
-          <Text style={[styles.text, { color: theme.text }]}>Dark Mode</Text>
-          <Switch
-            value={mode === "dark"}
-            onValueChange={toggleDarkMode}
-            thumbColor={mode === "dark" ? theme.tint : "#ccc"}
-            trackColor={{ false: "#767577", true: theme.tint }}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={[styles.text, { color: theme.text }]}>Notification</Text>
-          <Switch
-            value={notification}
-            onValueChange={setNotification}
-            thumbColor={notification ? theme.tint : "#ccc"}
-            trackColor={{ false: "#767577", true: theme.tint }}
-          />
-        </View>
-      </View>
-
-      {/* --- Logout --- */}
-      <View style={styles.section}>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text style={[styles.text, { color: "red", textAlign: "center" }]}>
-            Log Out
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* --- Modal para cambiar contraseña --- */}
-      <Modal
-        animationType="slide"
-        transparent
-        visible={showPasswordModal}
-        onRequestClose={() => setShowPasswordModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[styles.modalCard, { backgroundColor: theme.card }]}
+        {/* --- Account --- */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() => router.push("/profile/editProfile")}
           >
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
+            <Text style={[styles.text, { color: theme.text }]}>Edit Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() => {
+              dismissKeyboard();
+              setShowPasswordModal(true);
+            }}
+          >
+            <Text style={[styles.text, { color: theme.text }]}>
               Change Password
             </Text>
+          </TouchableOpacity>
+        </View>
 
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.inputBackground,
-                  color: theme.text,
-                  borderColor: mode === "dark" ? "#333" : "#ccc",
-                },
-              ]}
-              placeholder="Current Password"
-              placeholderTextColor={mode === "dark" ? "#888" : "#666"}
-              secureTextEntry
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
+        {/* --- Preferences --- */}
+        <View style={styles.section}>
+          <View style={styles.row}>
+            <Text style={[styles.text, { color: theme.text }]}>Dark Mode</Text>
+            <Switch
+              value={mode === "dark"}
+              onValueChange={toggleDarkMode}
+              thumbColor={mode === "dark" ? theme.tint : "#ccc"}
+              trackColor={{ false: "#767577", true: theme.tint }}
             />
+          </View>
 
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.inputBackground,
-                  color: theme.text,
-                  borderColor: mode === "dark" ? "#333" : "#ccc",
-                },
-              ]}
-              placeholder="New Password"
-              placeholderTextColor={mode === "dark" ? "#888" : "#666"}
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
+          <View style={styles.row}>
+            <Text style={[styles.text, { color: theme.text }]}>Notification</Text>
+            <Switch
+              value={notification}
+              onValueChange={setNotification}
+              thumbColor={notification ? theme.tint : "#ccc"}
+              trackColor={{ false: "#767577", true: theme.tint }}
             />
-
-            <TouchableOpacity
-              style={[styles.button, { backgroundColor: theme.button }]}
-              onPress={handleChangePassword}
-            >
-              <Text style={styles.buttonText}>Save</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setShowPasswordModal(false)}>
-              <Text style={[styles.link, { color: theme.tint }]}>Cancel</Text>
-            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
-    </View>
+
+        {/* --- Logout --- */}
+        <View style={styles.section}>
+          <TouchableOpacity onPress={handleLogout}>
+            <Text style={[styles.text, { color: "red", textAlign: "center" }]}>
+              Log Out
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* --- Modal para cambiar contraseña --- */}
+        <Modal
+          animationType="slide"
+          transparent
+          visible={showPasswordModal}
+          onRequestClose={() => {
+            dismissKeyboard();
+            setShowPasswordModal(false);
+          }}
+        >
+          <TouchableWithoutFeedback onPress={dismissKeyboard}>
+            <View style={styles.modalBackdrop}>
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={styles.modalContainer}
+              >
+                <TouchableWithoutFeedback onPress={dismissKeyboard}>
+                  <View
+                    style={[styles.modalCard, { backgroundColor: theme.card }]}
+                  >
+                    <Text style={[styles.modalTitle, { color: theme.text }]}>
+                      Change Password
+                    </Text>
+
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: theme.inputBackground,
+                          color: theme.text,
+                          borderColor: mode === "dark" ? "#333" : "#ccc",
+                        },
+                      ]}
+                      placeholder="Current Password"
+                      placeholderTextColor={mode === "dark" ? "#888" : "#666"}
+                      secureTextEntry
+                      value={currentPassword}
+                      onChangeText={setCurrentPassword}
+                    />
+
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: theme.inputBackground,
+                          color: theme.text,
+                          borderColor: mode === "dark" ? "#333" : "#ccc",
+                        },
+                      ]}
+                      placeholder="New Password"
+                      placeholderTextColor={mode === "dark" ? "#888" : "#666"}
+                      secureTextEntry
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                    />
+
+                    {/* Password Requirements */}
+                    <View style={{ marginVertical: 8 }}>
+                      <Text style={{ fontWeight: "600", color: theme.text }}>
+                        Password must include:
+                      </Text>
+                      {[
+                        { label: "8–16 characters", valid: newPassword.length >= 8 && newPassword.length <= 16 },
+                        { label: "At least 1 uppercase letter", valid: /[A-Z]/.test(newPassword) },
+                        { label: "At least 1 lowercase letter", valid: /[a-z]/.test(newPassword) },
+                        { label: "At least 1 number", valid: /[0-9]/.test(newPassword) },
+                        { label: "At least 1 symbol (!@#$%)", valid: /[!@#$%^&*(),.?\":{}|<>]/.test(newPassword) },
+                      ].map((rule, index) => (
+                        <View key={index} style={{ flexDirection: "row", alignItems: "center", marginVertical: 2 }}>
+                          <Text style={{ color: rule.valid ? "green" : mode === "dark" ? "#aaa" : "#666" }}>
+                            {rule.valid ? "✅" : "•"} {rule.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[styles.button, { backgroundColor: theme.button }]}
+                      onPress={handleChangePassword}
+                    >
+                      <Text style={styles.buttonText}>Save</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => {
+                      dismissKeyboard();
+                      setShowPasswordModal(false);
+                      setCurrentPassword("");
+                      setNewPassword("");
+                    }}>
+                      <Text style={[styles.link, { color: theme.tint }]}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableWithoutFeedback>
+              </KeyboardAvoidingView>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -238,10 +313,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(0,0,0,0.5)",
   },
+  modalContainer: {
+    width: "100%",
+    alignItems: "center",
+  },
   modalCard: {
     width: "85%",
     padding: 20,
     borderRadius: 12,
+    marginTop: 120, // Positioned lower like the other modals
   },
   modalTitle: {
     fontSize: 20,
@@ -259,6 +339,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 8,
     marginTop: 10,
+    marginBottom: 8,
   },
   buttonText: {
     color: "#fff",

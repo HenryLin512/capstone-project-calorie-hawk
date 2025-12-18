@@ -25,9 +25,9 @@ async function init() {
   const API = await safeGetApiKey();
   if (API) {
     CLARIFAI_PAT = API;
-    console.log("CLARIFAI_PAT set to:", CLARIFAI_PAT);
+    //console.log("CLARIFAI_PAT set to:", CLARIFAI_PAT);
   } else {
-    console.error("Failed to get API key");
+    //console.error("Failed to get API key");
   }
 }
 
