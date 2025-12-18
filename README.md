@@ -43,9 +43,10 @@ git clone <our repository URL> in your VS Code and download Expo Go on your phon
                       
                       npx expo start
                       
-                      The expo will start building the app locally on your machine, and it will display the QR code in your terminal.
+                     
+ * The expo will start building the app locally on your machine, and it will display the QR code in your terminal.
 
-                      Point your camera at the QR code to scan and wait for the app to finish setting up to use (Make sure you download Expo Go on Your Phone)
+ * Point your camera at the QR code to scan and wait for the app to finish setting up to use (Make sure you download Expo Go on Your Phone)
 
 ✔️ The app will run instantly — no setup needed.
 
