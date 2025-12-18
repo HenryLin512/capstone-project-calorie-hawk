@@ -11,7 +11,7 @@ Option 1 — 📱 Run with Expo Go (Easiest & Recommended)
 
 👉 Step 3 — Scan the QR Code
   * Here is the QR code link:
-[https://expo.dev/preview/update?message=Complete+Build+v2&updateRuntimeVersion=1.0.0&createdAt=2025-12-18T07%3A31%3A01.995Z&slug=exp&projectId=b4a59533-2248-4d83-8604-77ef484d1287&group=e60d73c0-7bbe-4b47-978e-36dc4335ef79 ](https://expo.dev/preview/update?message=Complete+Build+v3&updateRuntimeVersion=1.0.0&createdAt=2025-12-18T18%3A20%3A26.332Z&slug=exp&projectId=b4a59533-2248-4d83-8604-77ef484d1287&group=7722efea-8b5b-4fdc-bf57-8c2f74b1c265)
+https://expo.dev/preview/update?message=Complete+Build+v3&updateRuntimeVersion=1.0.0&createdAt=2025-12-18T18%3A20%3A26.332Z&slug=exp&projectId=b4a59533-2248-4d83-8604-77ef484d1287&group=7722efea-8b5b-4fdc-bf57-8c2f74b1c265
   
   * Copy and paste this link into your browser to access the QR code
   
