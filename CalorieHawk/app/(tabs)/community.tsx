@@ -21,6 +21,7 @@ import {
   KeyboardAvoidingView,
   Share,
   TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -141,6 +142,7 @@ export default function CommunityTab() {
   // comment state (per-post)
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState<Record<string, string>>({});
+  const [commentingPostId, setCommentingPostId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   // menu option for delete and edit
@@ -442,26 +444,38 @@ export default function CommunityTab() {
      Comments: view / add.
   ------------------------*/
   const submitComment = async (postId: string) => {
-  const text = (commentText[postId] || "").trim();
-  if (!text) return;
+    const text = (commentText[postId] || "").trim();
+    if (!text) return;
 
-  try {
-    const postRef = doc(db, "recipes", postId);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert("Login Required", "Please login to comment.");
+        return;
+      }
 
-    await updateDoc(postRef, {
-      comments: arrayUnion({
-        uid: auth.currentUser!.uid,
-        text,
-        createdAt: Timestamp.now(), // ✅ FIX
-      }),
-    });
+      setCommentingPostId(postId);
+      const postRef = doc(db, "recipes", postId);
 
-    setCommentText((s) => ({ ...s, [postId]: "" }));
-  } catch (e) {
-    console.error("comment error", e);
-    Alert.alert("Error", "Failed to post comment");
-  }
-};
+      await updateDoc(postRef, {
+        comments: arrayUnion({
+          uid: user.uid,
+          text,
+          createdAt: Timestamp.now(), // ✅ FIX
+        }),
+      });
+
+      // Clear the comment text for this specific post
+      setCommentText((prev) => ({ ...prev, [postId]: "" }));
+      Keyboard.dismiss(); // Dismiss keyboard after posting
+      
+    } catch (e) {
+      console.error("comment error", e);
+      Alert.alert("Error", "Failed to post comment");
+    } finally {
+      setCommentingPostId(null);
+    }
+  };
 
   /* ----------------------
      Helpers for profile lookup display
@@ -473,18 +487,6 @@ export default function CommunityTab() {
     // fallback to simple object constructed from author string
     return { uid: "local:" + post.author, displayName: post.author, photoURL: null } as Profile;
   };
-
-  /* ----------------------
-     Render
-  ------------------------*/
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text>Loading feed...</Text>
-      </View>
-    );
-  }
 
   /* ----------------------
      SharePost
@@ -709,13 +711,19 @@ export default function CommunityTab() {
                         }
                       ]}
                       multiline
+                      onSubmitEditing={() => submitComment(item.id)} // Allow Enter to submit
+                      returnKeyType="send"
                     />
 
                     <TouchableOpacity
                       style={[styles.commentPostBtn, 
                         { backgroundColor: theme.tint || "#007AFF" }]}
+                      onPress={() => submitComment(item.id)}
+                      disabled={commentingPostId === item.id}
                     >
-                      <Text style={{ color: "#fff", fontWeight: "600" }}>Post</Text>
+                      <Text style={{ color: "#fff", fontWeight: "600" }}>
+                        {commentingPostId === item.id ? "Posting..." : "Post"}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </KeyboardAvoidingView>
@@ -996,5 +1004,3 @@ menuItem: {
   fontWeight: "500",
 },
 });
-
-
