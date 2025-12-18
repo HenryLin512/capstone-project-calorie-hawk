@@ -696,13 +696,6 @@ export default function Dashboard() {
         </View>
 
         <View style={styles.goalRow}>
-          {/* <View style={styles.goalItem}> */}
-          {/* <View style={[styles.goalItem, { backgroundColor: theme.muted }]}>
-            <Text style={styles.goalLabel}>Eaten</Text>
-            <Text style={styles.goalNumber}>
-              {eatenCalories.toLocaleString()} kcal
-            </Text>
-          </View> */}
           <View style={[styles.goalItem, { backgroundColor: theme.card }]}>
             <Text style={[styles.goalLabel, { color: theme.subtext }]}>
               Eaten
@@ -711,13 +704,7 @@ export default function Dashboard() {
               {eatenCalories.toLocaleString()} kcal
             </Text>
           </View>
-          {/* <View style={styles.goalItem}> */}
-          {/* <View style={[styles.goalItem, { backgroundColor: theme.muted }]}>
-            <Text style={styles.goalLabel}>Goal</Text>
-            <Text style={styles.goalNumber}>
-              {dailyGoal.toLocaleString()} kcal
-            </Text>
-          </View> */}
+          
           <View style={[styles.goalItem, { backgroundColor: theme.card }]}>
             <Text style={[styles.goalLabel, { color: theme.subtext }]}>
               Goal
@@ -970,7 +957,7 @@ export default function Dashboard() {
                   >
                     {/* <Text style={styles.stepperText}>＋</Text> */}
                     {/* <Text style={[styles.stepperText, { color: theme.text }]}>＋</Text> */}
-                    <Text style={[styles.kcalUnit, { color: theme.subtext }]}>kcal</Text>
+                    <Text style={[styles.stepperText, { color: theme.text }]}>＋</Text>
                   </Pressable>
                 </View>
 
